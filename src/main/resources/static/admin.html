@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微聊 · 管理后台</title>
+    <link rel="stylesheet" href="css/style.css?v=20260823y">
+</head>
+<body class="ad-body" data-theme="light">
+
+<!-- 登录层 -->
+<div id="ad-login" class="ad-login">
+    <div class="ad-login-card">
+        <div class="ad-logo">微聊 · 管理后台</div>
+        <input id="ad-username" class="ad-input" placeholder="管理员账号 / 用户名">
+        <input id="ad-password" class="ad-input" type="password" placeholder="密码">
+        <button class="ad-submit" onclick="AdminApp.login()">登录</button>
+        <div id="ad-login-msg" class="ad-login-msg"></div>
+        <div class="ad-tip">独立管理入口 /admin · 仅管理员可登录，拥有最高权限</div>
+    </div>
+</div>
+
+<!-- 主面板 -->
+<div id="ad-shell" class="ad-shell hidden">
+    <aside class="ad-nav">
+        <div class="ad-nav-title">管理后台</div>
+        <button class="ad-nav-item active" data-view="overview" onclick="AdminApp.showView('overview')">系统概览</button>
+        <button class="ad-nav-item" data-view="users" onclick="AdminApp.showView('users')">用户管理</button>
+        <button class="ad-nav-item" data-view="messages" onclick="AdminApp.showView('messages')">聊天记录</button>
+        <button class="ad-nav-item" data-view="moments" onclick="AdminApp.showView('moments')">朋友圈</button>
+        <button class="ad-nav-item" data-view="review" onclick="AdminApp.showView('review')">内容审核</button>
+        <button class="ad-nav-item" data-view="assistant" onclick="AdminApp.showView('assistant')">AI 助手</button>
+        <button class="ad-nav-item" data-view="groups" onclick="AdminApp.showView('groups')">群聊管理</button>
+        <button class="ad-nav-item" data-view="notices" onclick="AdminApp.showView('notices')">通知管理</button>
+        <div class="ad-nav-spacer"></div>
+        <div class="ad-admin-name" id="ad-admin-name"></div>
+        <button class="ad-nav-logout" onclick="AdminApp.logout()">退出登录</button>
+    </aside>
+    <main class="ad-main" id="ad-main"></main>
+</div>
+
+<!-- 冻结原因弹窗 -->
+<div id="ad-freeze-modal" class="ad-modal hidden">
+    <div class="ad-modal-card">
+        <div class="ad-modal-title">冻结账号</div>
+        <div class="ad-modal-sub">请输入冻结原因，将作为系统通知发送给该用户</div>
+        <textarea id="ad-freeze-reason" class="ad-input" rows="4" placeholder="例如：违反社区规范"></textarea>
+        <div class="ad-modal-actions">
+            <button class="ad-btn ghost" onclick="AdminApp.cancelFreeze()">取消</button>
+            <button class="ad-btn danger" onclick="AdminApp.confirmFreeze()">确认冻结</button>
+        </div>
+    </div>
+</div>
+
+<!-- 打回整改弹窗 -->
+<div id="ad-reject-modal" class="ad-modal hidden">
+    <div class="ad-modal-card">
+        <div class="ad-modal-title">打回动态（整改）</div>
+        <div class="ad-modal-sub">请填写打回原因，将作为系统通知发送给动态作者，该动态将从广场下架</div>
+        <textarea id="ad-reject-reason" class="ad-input" rows="4" placeholder="例如：含违规内容，请修改后重新发布"></textarea>
+        <div class="ad-modal-actions">
+            <button class="ad-btn ghost" onclick="AdminApp.cancelReject()">取消</button>
+            <button class="ad-btn warn" onclick="AdminApp.confirmReject()">确认打回</button>
+        </div>
+    </div>
+</div>
+
+<script src="js/admin-app.js?v=20260823y"></script>
+</body>
+</html>

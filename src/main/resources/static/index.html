@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微聊</title>
+    <link rel="stylesheet" href="css/style.css?v=20260823y">
+</head>
+<body data-theme="light">
+
+<!-- 登录 / 注册 -->
+<div id="auth" class="auth">
+    <div class="auth-card">
+        <div class="logo">微聊</div>
+        <div class="auth-tabs">
+            <button id="tab-login" class="active" onclick="App.showAuth('login')">登录</button>
+            <button id="tab-register" onclick="App.showAuth('register')">注册</button>
+        </div>
+        <input id="auth-username" class="auth-input" placeholder="账号">
+        <input id="auth-email" class="auth-input hidden" placeholder="邮箱（用于接收验证码）">
+        <div class="auth-code-row hidden" id="auth-code-row">
+            <input id="auth-code" class="auth-input auth-code-input" placeholder="邮箱验证码">
+            <button id="auth-getcode" class="auth-code-btn" type="button" onclick="App.sendRegCode()">获取验证码</button>
+        </div>
+        <input id="auth-password" class="auth-input" type="password" placeholder="密码（字母+数字，长度>6）">
+        <input id="auth-confirm" class="auth-input hidden" type="password" placeholder="确认密码">
+        <button id="auth-submit" class="auth-submit" onclick="App.submitAuth()">登录</button>
+        <button id="auth-cancel" class="auth-cancel hidden" onclick="App.cancelSwitch()">取消切换</button>
+        <div class="auth-foot">
+            <a id="auth-forgot" class="auth-link" onclick="App.openForgotPassword()">忘记密码？</a>
+        </div>
+        <div id="auth-msg" class="auth-msg"></div>
+    </div>
+</div>
+
+<!-- 主界面 -->
+<div id="app" class="app hidden">
+    <div id="frozen-banner" class="frozen-banner hidden">⚠ 账号已被冻结，仅可查看通知、通讯与消息，其他功能已禁用</div>
+    <aside class="sidebar">
+        <div class="me">
+            <img id="me-avatar" class="avatar" alt="">
+            <div class="me-info">
+                <span id="me-nickname" class="me-name"></span>
+                <span id="me-account" class="me-account"></span>
+            </div>
+            <button class="theme-toggle" title="切换深色/浅色" onclick="App.toggleTheme()">🌙</button>
+            <button class="edit-profile" title="编辑个人资料" onclick="App.editProfile()">✎</button>
+            <button class="notice-bell" title="通知" onclick="App.openNoticeCenter()">🔔<span class="notice-badge hidden" id="notice-badge"></span></button>
+            <button class="logout" onclick="App.logout()">退出</button>
+        </div>
+        <div class="side-tabs">
+            <button data-tab="chat" class="active" onclick="App.switchTab('chat')">消息<span class="tab-badge" id="chat-tab-badge"></span></button>
+            <button data-tab="contacts" onclick="App.switchTab('contacts')">通讯录<span class="tab-badge" id="contacts-tab-badge"></span></button>
+            <button data-tab="moments" onclick="App.switchTab('moments')">多多的家园<span class="tab-badge" id="moments-tab-badge"></span></button>
+            <button data-tab="program" onclick="App.switchTab('program')">程序空间</button>
+            <button data-tab="admin" id="tab-admin" class="hidden" onclick="App.switchTab('admin')">管理</button>
+        </div>
+        <div class="side-search">
+            <input id="global-search" placeholder="搜索" oninput="App.onSearch(this.value)">
+        </div>
+        <div class="side-list" id="side-list"></div>
+    </aside>
+
+    <main class="chat">
+        <div class="chat-header" id="chat-header">选择一个会话开始聊天</div>
+        <div class="typing-tip" id="typing-tip"></div>
+        <div class="group-banner hidden" id="group-banner"></div>
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input">
+            <input type="file" id="img-input" accept="image/*" hidden onchange="Chat.sendImage(this)">
+            <input type="file" id="file-input" accept="*/*" hidden onchange="Chat.onFilePicked(this)">
+            <input type="file" id="voice-input" accept="audio/*" hidden onchange="Chat.sendVoice(this)">
+
+            <!-- 左：加急 / 语音切换 -->
+            <button id="btn-urgent" class="ci-ico urgent" disabled onclick="Chat.toggleUrgent()" title="加急发送（本条消息高亮提醒对方）">
+                <span class="ico">⚡</span>
+            </button>
+            <button id="btn-voice" class="ci-ico" disabled onclick="Chat.toggleVoiceMode()" title="切换语音 / 文字输入">
+                <span class="ico">🎤</span>
+            </button>
+
+            <!-- 中：文字输入框 / 按住说话（二选一，可互相切换） -->
+            <div class="ci-field">
+                <textarea id="msg-input" class="ci-text" placeholder="请选择好友或群聊开始聊天" disabled
+                    onfocus="Chat.onInputFocus()" onblur="Chat.onInputBlur()"
+                    oninput="Chat.onInput();" onkeydown="Chat.onComposerKey(event)"></textarea>
+                <button id="btn-hold" class="ci-hold hidden"
+                    onpointerdown="Chat.voicePointerDown(event)" onpointermove="Chat.voicePointerMove(event)" onpointerup="Chat.voicePointerUp(event)"
+                    title="按住说话；松开发送语音；上滑取消">按住 说话</button>
+            </div>
+
+            <!-- 右：发送 / 加号（加号点击展开图片 / 文件等功能） -->
+            <button id="btn-send" class="ci-send" disabled onclick="Chat.sendText()">发送</button>
+            <button id="btn-more" class="ci-ico" disabled onclick="Chat.onMoreClick()" title="更多功能（图片 / 文件等）">
+                <span class="ico">＋</span>
+            </button>
+
+            <!-- 功能面板：发图片 / 文件等（可继续扩展） -->
+            <div id="more-panel" class="more-panel hidden">
+                <div class="more-grid">
+                    <div class="more-item" onclick="Chat.pickImage()"><div class="mi-ico">🖼️</div><div class="mi-label">图片</div></div>
+                    <div class="more-item" onclick="Chat.pickFile()"><div class="mi-ico">📁</div><div class="mi-label">文件</div></div>
+                    <div class="more-item" onclick="App.notify('位置功能即将上线')"><div class="mi-ico">📍</div><div class="mi-label">位置</div></div>
+                    <div class="more-item" onclick="App.notify('名片功能即将上线')"><div class="mi-ico">🪪</div><div class="mi-label">名片</div></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 语音通话浮层 -->
+    <div id="call-incoming" class="call-overlay call-incoming hidden">
+        <div class="call-card">
+            <div class="ci-avatar"></div>
+            <div class="ci-name"></div>
+            <div class="call-tip">邀请你进行语音通话</div>
+            <div class="call-btns">
+                <button class="call-btn reject" onclick="Call.rejectCall()">拒绝</button>
+                <button class="call-btn accept" onclick="Call.acceptCall()">接听</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="call-calling" class="call-overlay call-calling hidden">
+        <div class="call-card">
+            <div class="cc-avatar"></div>
+            <div class="cc-name"></div>
+            <div class="call-tip">等待对方接听…</div>
+            <button class="call-btn reject" onclick="Call.hangup()">取消</button>
+        </div>
+    </div>
+
+    <div id="call-incall" class="call-overlay call-incall hidden">
+        <div class="call-card">
+            <div class="ci2-avatar"></div>
+            <div class="ci2-name"></div>
+            <div id="call-duration" class="call-duration">连接中…</div>
+            <div class="call-btns">
+                <button class="call-btn" id="call-mute-btn" onclick="Call.toggleMute(this)">🎙 静音</button>
+                <button class="call-btn reject" onclick="Call.hangup()">挂断</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 群聊选人发起通话 -->
+    <div id="call-picker" class="call-overlay call-picker hidden" onclick="if(event.target===this)Call.hidePicker()">
+        <div class="picker-card">
+            <div class="picker-head">选择群成员发起语音通话</div>
+            <div id="call-picker-list" class="picker-list"></div>
+            <button class="call-btn" onclick="Call.hidePicker()">取消</button>
+        </div>
+    </div>
+
+    <audio id="call-remote-audio" autoplay></audio>
+
+    <!-- 朋友圈 -->
+    <main class="moments hidden" id="moments"></main>
+
+    <!-- 程序空间（功能聚合容器：目前含学习空间，未来可扩展更多工具） -->
+    <main class="program hidden" id="program"></main>
+
+    <!-- 手机端底部主导航栏（桌面端隐藏）：像微信/常见 AI 网页那样固定底部切换 -->
+    <nav class="mobile-tabbar">
+        <button class="mtab" data-tab="chat" onclick="App.switchTab('chat')">
+            <span class="mtab-ico">💬</span><span class="mtab-txt">消息<span class="tab-badge" id="mtab-chat-badge"></span></span>
+        </button>
+        <button class="mtab" data-tab="contacts" onclick="App.switchTab('contacts')">
+            <span class="mtab-ico">👥</span><span class="mtab-txt">通讯录<span class="tab-badge" id="mtab-contacts-badge"></span></span>
+        </button>
+        <button class="mtab" data-tab="moments" onclick="App.switchTab('moments')">
+            <span class="mtab-ico">🌈</span><span class="mtab-txt">家园<span class="tab-badge" id="mtab-moments-badge"></span></span>
+        </button>
+        <button class="mtab" data-tab="program" onclick="App.switchTab('program')">
+            <span class="mtab-ico">🧩</span><span class="mtab-txt">程序空间</span>
+        </button>
+        <button class="mtab hidden" data-tab="admin" id="mtab-admin" onclick="App.switchTab('admin')">
+            <span class="mtab-ico">🛠</span><span class="mtab-txt">管理</span>
+        </button>
+    </nav>
+</div>
+
+<!-- 图片预览 -->
+<div id="img-modal" class="img-modal hidden" onclick="if(event.target===this)this.classList.add('hidden')">
+    <button class="img-modal-close" onclick="this.closest('.img-modal').classList.add('hidden')" title="关闭">✕</button>
+    <img id="img-modal-src" src="" alt="" onclick="event.stopPropagation()">
+</div>
+
+<!-- 通知弹窗（登录后未读提醒）/ 通知中心（点击铃铛查看） -->
+<div id="notice-modal" class="notice-modal hidden">
+    <div class="notice-box">
+        <div class="notice-box-head">
+            <span id="notice-modal-title">系统通知</span>
+            <button class="notice-close" onclick="App.closeNoticeModal()">✕</button>
+        </div>
+        <div class="notice-tabs" id="notice-tabs"></div>
+        <div class="notice-list" id="notice-modal-list"></div>
+        <div class="notice-box-foot" id="notice-box-foot">
+            <button class="ad-btn" onclick="App.markNoticeReadAndClose()">我知道了</button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+<script src="js/app.js?v=20260824b"></script>
+        <script src="js/api.js?v=20260824b"></script>
+<script src="js/ws.js?v=20260824b"></script>
+<script src="js/chat.js?v=20260824b"></script>
+<script src="js/call.js?v=20260725b"></script>
+<script src="js/friend.js?v=20260824b"></script>
+<script src="js/group.js?v=20260726a"></script>
+<script src="js/moment.js?v=20260824b"></script>
+<script src="js/admin.js?v=20260725al"></script>
+<script src="js/program.js?v=20260823g"></script>
+<script src="js/study.js?v=20260823w"></script>
+<script src="js/painting.js?v=20260823g"></script>
+</body>
+</html>
