@@ -1,0 +1,68 @@
+server:
+  port: 8080
+
+spring:
+  config:
+    import: optional:classpath:application-local.yml
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+  datasource:
+    url: jdbc:mysql://localhost:3306/spring_chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: hsp
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  mybatis-plus:
+    mapper-locations: classpath*:/mapper/**/*.xml
+    type-aliases-package: com.moyo.springchat.entity
+    configuration:
+      map-underscore-to-camel-case: true
+    global-config:
+      db-config:
+        id-type: auto
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 377850
+      database: 0
+      # 本地 Redis 无密码；如需鉴权在此填 password
+      timeout: 3000ms
+  # ============ QQ 邮箱发送验证码（邮箱验证登录准备） ============
+  # 使用前请先去 QQ 邮箱网页端：设置 → 账号与安全 → 开启 POP3/IMAP/SMTP 服务，
+  # 按提示用手机短信验证生成 16 位「授权码」（不是 QQ 密码），填到下面的 password。
+  # host 固定 smtp.qq.com；端口 465 为 SSL，587 为 TLS（二选一，下面配的是 465 SSL）。
+  mail:
+    host: smtp.qq.com
+    port: 465
+    username: ${QQ_MAIL_ACCOUNT}      # 改成你自己的 QQ 邮箱，如 123456789@qq.com
+    password: ${QQ_MAIL_PASSWORD}         # 改成上面生成的 16 位授权码
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+            required: false
+
+minio:
+  accessKey: admin
+  secretKey: ${COMMON_PASSWORD}
+  bucket: spring-chat
+  endpoint: http://localhost:9000 #  minio服务地址
+  readPath: http://localhost:9000 # minio对外提供服务的url
+
+app:
+  admin:
+    username: admin      # 管理后台登录用户名
+    password: admin123   # 管理后台登录密码（生产请修改）
+  # 邮箱验证码登录配置（准备阶段）
+  verify-code:
+    expire-seconds: 300  # 验证码有效期（秒），默认 5 分钟
+    length: 6            # 验证码位数
+    resend-seconds: 60   # 验证码重新发送冷却（秒），前端倒计时以此为准
