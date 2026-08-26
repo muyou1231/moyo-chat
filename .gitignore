@@ -32,8 +32,6 @@ build/
 ### VS Code ###
 .vscode/
 
-# 本地密钥/个性化配置（含阿里云百炼 API Key），绝不提交
-application-local.yml
 
 # Agent 工作目录（含依赖垃圾 node_modules 与本地工作记忆日志），非项目代码，不提交
 .workbuddy/
