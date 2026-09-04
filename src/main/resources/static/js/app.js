@@ -499,12 +499,25 @@ App.previewImage = function (src) {
     document.getElementById('img-modal').classList.remove('hidden');
 };
 
-App.notify = function (msg) {
+App.notify = function (msg, type) {
+    if (!type) {
+        // 自动语义识别：无需逐一改造调用方，就能让失败提示自动变成“高警色”
+        type = /失败|错误|无法|不能|异常/.test(msg || '') ? 'error' : 'info';
+    }
+    let stack = document.getElementById('toast-stack');
+    if (!stack) {
+        stack = document.createElement('div');
+        stack.id = 'toast-stack';
+        document.body.appendChild(stack);
+    }
     const t = document.createElement('div');
-    t.className = 'toast';
+    t.className = 'toast ' + type;
     t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(function () { t.remove(); }, 1800);
+    stack.appendChild(t);
+    setTimeout(function () {
+        t.classList.add('closing');
+        setTimeout(function () { t.remove(); }, 200);
+    }, 2200);
 };
 
 /* 主题切换（浅色 / 深色），持久化到 localStorage */
@@ -518,6 +531,12 @@ App.applyTheme = function (theme) {
 App.toggleTheme = function () {
     const cur = document.body.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
     App.applyTheme(cur === 'dark' ? 'light' : 'dark');
+    const btn = document.querySelector('.theme-toggle');
+    if (btn) {
+        btn.classList.remove('spin-once');
+        void btn.offsetWidth; // 强制重排以重启动画
+        btn.classList.add('spin-once');
+    }
 };
 
 /* 通用弹窗（cls 可附加额外样式类，如 'wide' 加宽） */
@@ -654,7 +673,9 @@ App.showAuth = function (mode) {
     App.authMode = mode;
     const isSwitch = (mode === 'switch');
     const isReg = (mode === 'register');
-    // 切换账号时隐藏 登录/注册 标签页
+    // 切换账号时隐藏 登录/注册 标签页（连容器一并隐藏，避免胶囊背景条在无可见按钮时留下一条空白背景）
+    const authTabs = document.querySelector('.auth-tabs');
+    if (authTabs) authTabs.classList.toggle('hidden', isSwitch);
     document.querySelectorAll('.auth-tabs button').forEach(function (b) {
         b.classList.toggle('hidden', isSwitch);
     });
@@ -669,6 +690,9 @@ App.showAuth = function (mode) {
     if (forgot) forgot.classList.toggle('hidden', mode !== 'login');
     const submit = document.getElementById('auth-submit');
     submit.textContent = isSwitch ? '切换并登录' : (isReg ? '注册并登录' : '登录');
+    // 重置提交按钮的 loading 态，避免上一次提交失败/切换后按钮卡在“提交中”样式
+    submit.disabled = false;
+    submit.classList.remove('btn-loading');
     const cancel = document.getElementById('auth-cancel');
     if (cancel) cancel.classList.toggle('hidden', !isSwitch);
     const acc = document.getElementById('auth-username');
@@ -685,9 +709,17 @@ App.showAuth = function (mode) {
 App.submitAuth = function () {
     const account = document.getElementById('auth-username').value.trim();
     const password = document.getElementById('auth-password').value;
-    // 注册只填用户名；昵称默认等于用户名（后端兜底），此处不再单独读取昵称字段
+    // 注册只填用户名；昵称默认等于用户名（后端兆底），此处不再单独读取昵称字段
     const nickname = '';
     if (!account || !password) { App.toast('请输入账号和密码', false); return; }
+
+    const submitBtn = document.getElementById('auth-submit');
+    const setBusy = function (busy) {
+        if (!submitBtn) return;
+        submitBtn.disabled = !!busy;
+        submitBtn.classList.toggle('btn-loading', !!busy);
+    };
+    const failNetwork = function () { setBusy(false); App.toast('网络异常，请稍后重试', false); };
 
     // 切换账号：校验不能与当前账号相同，成功后旧账号下线、新账号上线
     if (App.authMode === 'switch') {
@@ -695,20 +727,21 @@ App.submitAuth = function () {
             App.toast('不能切换到当前账号', false);
             return;
         }
+        setBusy(true);
         Api.switchAccount(account, password).then(function (data) {
-            if (!data || data.code !== 0) { App.toast(data ? data.message : '切换失败', false); return; }
+            if (!data || data.code !== 0) { setBusy(false); App.toast(data ? data.message : '切换失败', false); return; }
             Ws.disconnect();
             App.token = data.data.token;
             App.user = data.data.user;
             App.saveSession();
             App.enterApp();
-            App.notify('已切换到账号 ' + (App.user.account || ''));
-        });
+            App.notify('已切换到账号 ' + (App.user.account || ''), 'success');
+        }).catch(failNetwork);
         return;
     }
 
     const done = function (data) {
-        if (!data || data.code !== 0) { App.toast(data ? data.message : '请求失败', false); return; }
+        if (!data || data.code !== 0) { setBusy(false); App.toast(data ? data.message : '请求失败', false); return; }
         const d = data.data;
         App.token = d.token;
         App.user = d.user;
@@ -717,7 +750,8 @@ App.submitAuth = function () {
     };
 
     if (App.authMode === 'login') {
-        Api.login(account, password).then(done);   // 邮箱 / 用户名 / 账号 登录
+        setBusy(true);
+        Api.login(account, password).then(done).catch(failNetwork);   // 邮箱 / 用户名 / 账号 登录
     } else {
         // 注册：需用户名 + 邮箱验证 + 密码强度
         const email = document.getElementById('auth-email').value.trim();
@@ -728,10 +762,11 @@ App.submitAuth = function () {
         if (!App.validPassword(password)) { App.toast('密码须包含字母和数字，且长度大于6', false); return; }
         if (password !== confirm) { App.toast('两次输入的密码不一致', false); return; }
         if (!code) { App.toast('请先获取并填写邮箱验证码', false); return; }
+        setBusy(true);
         Api.register(account, email, password, code, nickname).then(function (d) {
             if (d && d.code === 0) App.toast('注册成功，已自动登录', true); // 注册成功自动登录
             done(d);
-        });
+        }).catch(failNetwork);
     }
 };
 
@@ -759,7 +794,13 @@ App.afterLogin = function () {
 App.enterApp = function () {
     if (Ws.client) Ws.disconnect();      // 切换账号时先断开旧连接，再以新身份重连
     document.getElementById('auth').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
+    const appRoot = document.getElementById('app');
+    appRoot.classList.remove('hidden');
+    // 登录/切换成功后主面板的轻盈入场动画，避免硬切出现
+    appRoot.classList.remove('app-enter');
+    void appRoot.offsetWidth;
+    appRoot.classList.add('app-enter');
+    setTimeout(function () { appRoot.classList.remove('app-enter'); }, 520);
     document.getElementById('me-avatar').outerHTML = App.avatarWithStatus(App.user).replace('class="avatar"', 'class="avatar" id="me-avatar"');
     document.getElementById('me-nickname').textContent = App.user.nickname || App.user.username;
     const accEl = document.getElementById('me-account');
@@ -1082,6 +1123,10 @@ App.setMobileView = function (v) {
         app.classList.remove(c);
     });
     app.classList.add('mv-' + v);
+    // 手机端切换全屏视图时的轻微滑入反馈，与原生 App 进阶时的手感保持一致
+    app.classList.remove('mv-anim');
+    void app.offsetWidth;
+    app.classList.add('mv-anim');
 };
 
 /* 跨断点（旋转/缩放窗口）时重置视图：手机端默认列表，桌面端恢复三栏 */
@@ -1120,6 +1165,13 @@ App.switchTab = function (tab) {
     if (chatMain) chatMain.classList.toggle('hidden', hideChat);
     if (momentsMain) momentsMain.classList.toggle('hidden', tab !== 'moments');
     if (programMain) programMain.classList.toggle('hidden', tab !== 'program');
+    // 主面板切换时给当前显示的面板加一个轻盈淡入动画，让 tab 跳转更丝滑
+    var shownPanel = hideChat ? (tab === 'moments' ? momentsMain : programMain) : chatMain;
+    if (shownPanel) {
+        shownPanel.classList.remove('panel-fade');
+        void shownPanel.offsetWidth;
+        shownPanel.classList.add('panel-fade');
+    }
     if (tab === 'chat') Chat.renderConversations();
     else if (tab === 'contacts') Friend.renderContacts();
     else if (tab === 'moments' && window.Moment) Moment.render();

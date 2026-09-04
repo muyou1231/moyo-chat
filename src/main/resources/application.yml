@@ -1,5 +1,11 @@
 server:
   port: 8080
+  # 开启响应压缩：文本类接口（JSON/HTML/CSS/JS）体积普遍能减小 60%~80%，
+  # 弱网/移动端下页面与接口的「首屏到可交互」时间明显缩短，几乎零成本。
+  compression:
+    enabled: true
+    mime-types: application/json,application/javascript,text/css,text/html,text/plain,text/javascript,image/svg+xml
+    min-response-size: 1KB
 
 spring:
   config:
@@ -8,11 +14,25 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 20MB
+  # 静态资源（css/js）长缓存：index.html / admin.html 已通过 ?v=xxx 做缓存穿透，
+  # 命中缓存时浏览器可直接复用本地副本、无需再次请求，页面跳转/刷新更「丝滑」。
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          max-age: 7d
+        use-last-modified: true
   datasource:
     url: jdbc:mysql://localhost:3306/spring_chat?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: hsp
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 适度放宽连接池上限，避免高并发场景（群聊消息风暴 / 朋友圈广场刷新）下请求排队等待连接
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 8000
+      leak-detection-threshold: 30000
   mybatis-plus:
     mapper-locations: classpath*:/mapper/**/*.xml
     type-aliases-package: com.moyo.springchat.entity

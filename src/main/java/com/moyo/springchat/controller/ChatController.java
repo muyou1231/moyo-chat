@@ -20,6 +20,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * WebSocket 消息入口：客户端发送到 /app/chat.send
@@ -50,6 +52,10 @@ public class ChatController {
 
     /** 记录每个用户上一次成功发送加急消息的时间戳 */
     private final ConcurrentMap<Long, Long> lastUrgentTime = new ConcurrentHashMap<>();
+
+    /** AI 助手异步回复的共享线程池：复用线程而非每条消息都 new Thread，
+     *  避免群聊/私聊短时间内大量用户同时找 AI 说话时产生线程风暴（与 AiController 的流式线程池同思路）。 */
+    private final ExecutorService assistantReplyExecutor = Executors.newCachedThreadPool();
 
     @MessageMapping("chat.send")
     public void handle(@Payload MessageSendDto dto, Principal principal) {
@@ -145,7 +151,7 @@ public class ChatController {
         typing.put("targetId", userId);
         messagingTemplate.convertAndSend("/topic/user/" + userId, typing);
 
-        new Thread(() -> {
+        assistantReplyExecutor.execute(() -> {
             try {
                 String reply = aiAssistantService.chat(assistantId, userText);
                 if (reply != null && !reply.isBlank()) {
@@ -162,7 +168,7 @@ public class ChatController {
                 err.put("content", "moyo助手暂时无法回复，请稍后再试～");
                 messagingTemplate.convertAndSend("/topic/user/" + userId, err);
             }
-        }, "moyo-assistant-reply").start();
+        });
     }
 
     /**

@@ -122,9 +122,13 @@ spring-chat/
     └── static/
         ├── index.html                # 登录/注册 + 主聊天页（SPA 单页切换）
         ├── admin.html                # 管理后台页
-        ├── css/style.css             # 微信风格样式
+        ├── css/
+        │   ├── style.css             # 微信风格基础样式（组件/布局/响应式）
+        │   └── style-premium.css     # 视觉与交互精装升级层：设计令牌/动效/渐变按钮/玻璃拟态登录页等，
+        │                             # 覆盖 style.css 同名选择器做整体打磨，不改动 style.css 本身，移除对应 <link> 即可整体回退
         └── js/                       # api / ws / app / chat / friend / group /
-                                      # moment / study / painting / call / admin-app 等
+                                      # moment / study / painting / call / admin-app /
+                                      # ui-polish（跨页面弹窗关闭动效等通用交互增强）等
 ```
 
 ---
@@ -444,8 +448,10 @@ DELETE /admin/assistants/{id}              删除助手
 - **Mapper 显式化**：所有 Mapper 位于 `com.moyo.springchat.mapper`，**不继承 `BaseMapper`**；CRUD 用显式 `@Insert/@Select/@Update/@Delete` + `@Options(useGeneratedKeys=true, keyProperty="id")`。
 - **SQL 分类管理**：全量建表仅放 `schema.sql`（DROP+重建）；增量变更放 `update-sql/` 用 `ALTER TABLE`，不让单个脚本覆盖线上数据。
 - **前端版本缓存**：`index.html` 脚本带 `?v=YYYYMMDDxx`，改动后 bump 版本号 + 硬刷；改 `static/js` 后必须 `mvn compile` 同步到 `target/classes`。
+- **样式分层**：`style.css` 为基础布局/组件样式，`style-premium.css` 为后置升级层（加载顺序在其之后，用相同选择器覆盖/叠加阴影、动效、渐变等视觉打磨）；新组件优先在 `style.css` 定义基础样式，视觉精装改动放到 `style-premium.css`，便于整体回退。`js/ui-polish.js` 需作为页面第一个 `<script>` 加载（早于 app.js / admin-app.js），提供弹层关闭动效等跨页面通用交互能力。
 - **密钥管理**：任何密钥（AI Key、邮箱授权码、MinIO 密码）只放 `application-local.yml`，该文件已 git-ignore，**绝不提交**。
 - **消息类型**：`TEXT / IMAGE / VOICE / CALL`；图片/语音复用 `content` 存 MinIO 代理 URL；`CALL` content 存 `{r:结果码, d:秒}`，搜索不收录。
+- **异步任务**：需要后台异步执行的任务（AI 回复/审核等）统一复用线程池（`Executors.newCachedThreadPool()`），不要为每次调用 `new Thread(...).start()`。
 
 ---
 

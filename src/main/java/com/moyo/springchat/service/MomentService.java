@@ -23,6 +23,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 朋友圈（动态）业务。
@@ -60,6 +62,9 @@ public class MomentService {
     private MomentLikeService likeService;
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    /** AI 审核异步任务的共享线程池：复用线程而非每发一条动态都 new Thread，与 ChatController/AiController 同思路 */
+    private final ExecutorService aiReviewExecutor = Executors.newCachedThreadPool();
 
     /* ================ 全局查看范围设置 ================ */
 
@@ -137,7 +142,7 @@ public class MomentService {
             final String reviewText = hasText ? content.trim() : "";
             final Long newId = m.getId();
             final Long authorId = uid;
-            new Thread(() -> asyncAiReview(newId, authorId, reviewText), "moyo-ai-review-" + newId).start();
+            aiReviewExecutor.execute(() -> asyncAiReview(newId, authorId, reviewText));
             return m;
         } else {
             // MANUAL 人工审核
@@ -411,7 +416,7 @@ public class MomentService {
             final String reviewText = hasText ? content.trim() : "";
             final Long newId = m.getId();
             final Long authorId = m.getUserId();
-            new Thread(() -> asyncAiReview(newId, authorId, reviewText), "moyo-ai-review-" + newId).start();
+            aiReviewExecutor.execute(() -> asyncAiReview(newId, authorId, reviewText));
         } else {
             m.setStatus("PENDING");
             m.setAiReview(null);

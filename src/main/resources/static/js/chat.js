@@ -22,6 +22,17 @@ window.Chat = (function () {
         });
     }
 
+    /** 新消息到达时的丝滑滚动：只有在已接近底部时才用平滑滚动，避免深翻历史时被强行拽回底部时出现长时间滚动动画 */
+    function scrollToBottom(box, smooth) {
+        if (!box) return;
+        const distance = box.scrollHeight - box.clientHeight - box.scrollTop;
+        if (smooth && distance < 600 && typeof box.scrollTo === 'function') {
+            box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
+        } else {
+            box.scrollTop = box.scrollHeight;
+        }
+    }
+
     function previewOf(wm) {
         if (!wm) return '';
         if (wm.recalled) return '[撤回]';
@@ -542,7 +553,7 @@ window.Chat = (function () {
         assistantTypingNode.className = 'msg assistant-typing';
         assistantTypingNode.innerHTML = '<div class="bubble typing"><span></span><span></span><span></span></div>';
         box.appendChild(assistantTypingNode);
-        box.scrollTop = box.scrollHeight;
+        scrollToBottom(box, true);
     }
 
     function appendBubble(wm, scroll) {
@@ -561,7 +572,7 @@ window.Chat = (function () {
             const who = wm.senderId === App.user.id ? '你' : (wm.senderNickname || (App.current ? App.current.name : '对方'));
             tip.textContent = who + ' 撤回了一条消息';
             box.appendChild(tip);
-            if (scroll !== false) box.scrollTop = box.scrollHeight;
+            if (scroll !== false) scrollToBottom(box, true);
             return;
         }
         const t = document.createElement('div');
@@ -569,7 +580,7 @@ window.Chat = (function () {
         t.textContent = App.msgTime(wm.createTime);
         box.appendChild(t);
         box.appendChild(bubbleNode(wm));
-        if (scroll !== false) box.scrollTop = box.scrollHeight;
+        if (scroll !== false) scrollToBottom(box, true);
     }
 
     function belongsToCurrent(wm) {
@@ -1549,7 +1560,7 @@ window.Chat = (function () {
             wrap.appendChild(buildFailTag(tmpId));
         }
         box.appendChild(wrap);
-        box.scrollTop = box.scrollHeight;
+        scrollToBottom(box, true);
     }
 
     function buildFailTag(tmpId) {
