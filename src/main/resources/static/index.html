@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>微聊</title>
     <link rel="stylesheet" href="css/style.css?v=20260903a">
-    <link rel="stylesheet" href="css/style-premium.css?v=20260903a">
+    <link rel="stylesheet" href="css/style-premium.css?v=20260904a">
 </head>
 <body data-theme="light">
 
@@ -75,6 +75,9 @@
             <!-- 左：加急 / 语音切换 -->
             <button id="btn-urgent" class="ci-ico urgent" disabled onclick="Chat.toggleUrgent()" title="加急发送（本条消息高亮提醒对方）">
                 <span class="ico">⚡</span>
+            </button>
+            <button id="btn-bomb" class="ci-ico bomb" disabled onclick="Chat.toggleBomb()" title="消息炸弹：对方须在 30 秒内回复，否则引爆">
+                <span class="ico">💣</span>
             </button>
             <button id="btn-voice" class="ci-ico" disabled onclick="Chat.toggleVoiceMode()" title="切换语音 / 文字输入">
                 <span class="ico">🎤</span>
@@ -204,15 +207,15 @@
 <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
 <script src="js/ui-polish.js?v=20260903a"></script>
 <script src="js/app.js?v=20260903a"></script>
-        <script src="js/api.js?v=20260824b"></script>
-<script src="js/ws.js?v=20260824b"></script>
-<script src="js/chat.js?v=20260903a"></script>
+        <script src="js/api.js?v=20260904a"></script>
+<script src="js/ws.js?v=20260904a"></script>
+<script src="js/chat.js?v=20260904a"></script>
 <script src="js/call.js?v=20260725b"></script>
 <script src="js/friend.js?v=20260824b"></script>
 <script src="js/group.js?v=20260726a"></script>
 <script src="js/moment.js?v=20260824b"></script>
 <script src="js/admin.js?v=20260725al"></script>
-<script src="js/program.js?v=20260823g"></script>
+<script src="js/program.js?v=20260904a"></script>
 <script src="js/study.js?v=20260823w"></script>
 <script src="js/painting.js?v=20260823g"></script>
 </body>

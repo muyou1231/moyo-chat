@@ -30,6 +30,13 @@ public class WsMessage {
     private java.util.List<Long> readIds;
     /** TYPING 通知专用：对方是否正在输入 */
     private Boolean typing = false;
+    /** ④ 消息改写：对方已读后修改过，需显示“已编辑”标记（除非 edit_hidden 已隐藏） */
+    private Boolean edited = false;
+    private String editedTime;
+    /** ⑩ 消息炸弹：倒计时秒数 / 截止时间 / 状态（PENDING/REPLIED/EXPLODED），非炸弹消息均为 null */
+    private Integer bombSeconds;
+    private String bombDeadline;
+    private String bombStatus;
 
     public Long getId() {
         return id;
@@ -149,6 +156,46 @@ public class WsMessage {
 
     public void setTyping(Boolean typing) {
         this.typing = typing;
+    }
+
+    public Boolean getEdited() {
+        return edited;
+    }
+
+    public void setEdited(Boolean edited) {
+        this.edited = edited;
+    }
+
+    public String getEditedTime() {
+        return editedTime;
+    }
+
+    public void setEditedTime(String editedTime) {
+        this.editedTime = editedTime;
+    }
+
+    public Integer getBombSeconds() {
+        return bombSeconds;
+    }
+
+    public void setBombSeconds(Integer bombSeconds) {
+        this.bombSeconds = bombSeconds;
+    }
+
+    public String getBombDeadline() {
+        return bombDeadline;
+    }
+
+    public void setBombDeadline(String bombDeadline) {
+        this.bombDeadline = bombDeadline;
+    }
+
+    public String getBombStatus() {
+        return bombStatus;
+    }
+
+    public void setBombStatus(String bombStatus) {
+        this.bombStatus = bombStatus;
     }
 
     /** 历史消息分页结果（含总数和 hasMore 标记） */

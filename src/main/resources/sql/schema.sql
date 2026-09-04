@@ -108,8 +108,15 @@ CREATE TABLE message (
     recalled    TINYINT(1)   DEFAULT 0,
     urgent      TINYINT(1)   DEFAULT 0,
     deleted     TINYINT(1)   DEFAULT 0 COMMENT '软删除：0=正常 1=用户已删除',
+    edited      TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '消息改写：1=对方已读后修改过（需显示“已编辑”标记）',
+    edited_time DATETIME     DEFAULT NULL COMMENT '最后一次修改时间',
+    edit_hidden TINYINT(1)   NOT NULL DEFAULT 0 COMMENT '1=已消耗积分隐藏“已编辑”标记',
+    bomb_seconds  INT        DEFAULT NULL COMMENT '消息炸弹：发送时设定的倒计时秒数，NULL=非炸弹消息',
+    bomb_deadline DATETIME   DEFAULT NULL COMMENT '消息炸弹：对方须在此时间前回复，否则自动引爆',
+    bomb_status   VARCHAR(16) DEFAULT NULL COMMENT '消息炸弹状态：PENDING/REPLIED/EXPLODED',
     PRIMARY KEY (id),
-    KEY idx_message_target (target_type, target_id, create_time)
+    KEY idx_message_target (target_type, target_id, create_time),
+    KEY idx_message_bomb (bomb_status, bomb_deadline)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 会话置顶表（用户对好友/群的置顶标记）
@@ -315,4 +322,77 @@ CREATE TABLE painting (
     create_time DATETIME     DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     KEY idx_painting_user (user_id, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ===================== 2026-09-04 新增：创新功能批次一 =====================
+
+-- 用户通用开关设置（隐身阅读等开关型配置聚合，避免表膜胀）
+CREATE TABLE user_setting (
+    id          BIGINT      NOT NULL AUTO_INCREMENT,
+    user_id     BIGINT      NOT NULL,
+    ghost_read  TINYINT(1)  NOT NULL DEFAULT 0 COMMENT '隐身阅读：1=开启后自己阅读不会触发已读回执推送给对方',
+    update_time DATETIME    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_setting_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 消息改写历史（保留每一次修改前的内容，仅发送者本人可查）
+CREATE TABLE message_edit_history (
+    id          BIGINT      NOT NULL AUTO_INCREMENT,
+    message_id  BIGINT      NOT NULL,
+    content     TEXT        NOT NULL COMMENT '该次修改前的历史内容（含最初原文 version=0）',
+    version     INT         NOT NULL DEFAULT 0,
+    edited_time DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_edit_history_msg (message_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 聊天挖矿：用户积分余额（一人一行）
+CREATE TABLE user_points (
+    id          BIGINT     NOT NULL AUTO_INCREMENT,
+    user_id     BIGINT     NOT NULL,
+    points      BIGINT     NOT NULL DEFAULT 0,
+    level       TINYINT    NOT NULL DEFAULT 1,
+    update_time DATETIME   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_points_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 聊天挖矿：积分变动流水（用于明细展示 + 每日限额统计）
+CREATE TABLE points_log (
+    id          BIGINT      NOT NULL AUTO_INCREMENT,
+    user_id     BIGINT      NOT NULL,
+    change_val  INT         NOT NULL COMMENT '正=获得，负=消耗',
+    reason      VARCHAR(32) NOT NULL COMMENT 'CHAT_DURATION/MESSAGE_SEND/HIDE_EDIT_MARK 等',
+    ref_id      BIGINT      DEFAULT NULL,
+    create_time DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_points_log_user_time (user_id, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 聊天挖矿：双人亲密度（user_a 总是较小的 user_id，保证 (a,b) 唯一且不存反向对）
+CREATE TABLE intimacy (
+    id          BIGINT     NOT NULL AUTO_INCREMENT,
+    user_a      BIGINT     NOT NULL,
+    user_b      BIGINT     NOT NULL,
+    exp         INT        NOT NULL DEFAULT 0,
+    level       TINYINT    NOT NULL DEFAULT 1,
+    update_time DATETIME   DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_intimacy_pair (user_a, user_b)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 时间胶囊：写给未来的信（可写给自己或好友，指定日期解锁）
+CREATE TABLE time_capsule (
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    sender_id     BIGINT       NOT NULL,
+    receiver_id   BIGINT       DEFAULT NULL COMMENT 'NULL=写给未来的自己',
+    content_enc   TEXT         NOT NULL COMMENT 'AES-256-GCM 加密后的正文（密文 Base64）',
+    open_time     DATETIME     NOT NULL COMMENT '精确到日的开启日期',
+    status        VARCHAR(16)  NOT NULL DEFAULT 'SEALED' COMMENT 'SEALED=封存中 / UNLOCKED=已解锁',
+    unlocked_time DATETIME     DEFAULT NULL,
+    create_time   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_capsule_open (status, open_time),
+    KEY idx_capsule_receiver (receiver_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

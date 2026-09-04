@@ -9,6 +9,7 @@ import com.moyo.springchat.mapper.MessageMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +31,17 @@ public class MessageService {
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public WsMessage save(Long senderId, String type, String content, String targetType, Long targetId, Boolean urgent) {
+        return save(senderId, type, content, targetType, targetId, urgent, null);
+    }
+
+    /**
+     * 落库一条消息。
+     *
+     * @param bombSeconds ⑨ 消息炸弹倒计时秒数；null 或 &lt;=0 表示普通消息。
+     *                    仅单聊文本消息生效（由调用方保证），炸弹到期未获回复会被定时任务引爆。
+     */
+    public WsMessage save(Long senderId, String type, String content, String targetType, Long targetId,
+                          Boolean urgent, Integer bombSeconds) {
         Message m = new Message();
         m.setSenderId(senderId);
         m.setType(type);
@@ -37,6 +49,11 @@ public class MessageService {
         m.setTargetType(targetType);
         m.setTargetId(targetId);
         m.setUrgent(Boolean.TRUE.equals(urgent));
+        if (bombSeconds != null && bombSeconds > 0) {
+            m.setBombSeconds(bombSeconds);
+            m.setBombDeadline(LocalDateTime.now().plusSeconds(bombSeconds));
+            m.setBombStatus("PENDING");
+        }
         messageMapper.insert(m);
         return toWs(m);
     }
@@ -59,6 +76,14 @@ public class MessageService {
         w.setRead(Boolean.TRUE.equals(m.getRead()));
         w.setUrgent(Boolean.TRUE.equals(m.getUrgent()));
         w.setDeleted(Boolean.TRUE.equals(m.getDeleted()));
+        // ④ 消息改写：已读后修改过且未花积分隐藏标记时，前端气泡显示「已编辑」
+        boolean showEdited = Boolean.TRUE.equals(m.getEdited()) && !Boolean.TRUE.equals(m.getEditHidden());
+        w.setEdited(showEdited);
+        w.setEditedTime(m.getEditedTime() == null ? null : m.getEditedTime().format(FMT));
+        // ⑨ 消息炸弹：倒计时秒数 / 截止时间 / 状态，普通消息均为 null
+        w.setBombSeconds(m.getBombSeconds());
+        w.setBombDeadline(m.getBombDeadline() == null ? null : m.getBombDeadline().format(FMT));
+        w.setBombStatus(m.getBombStatus());
         return w;
     }
 

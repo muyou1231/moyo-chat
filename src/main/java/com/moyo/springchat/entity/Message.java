@@ -40,6 +40,24 @@ public class Message {
     @TableField("deleted")
     private Boolean deleted = false;
 
+    /** 消息改写：对方已读后修改过内容，需显示“已编辑”标记 */
+    private Boolean edited = false;
+
+    /** 最后一次修改时间 */
+    private LocalDateTime editedTime;
+
+    /** 1=已消耗积分隐藏“已编辑”标记 */
+    private Boolean editHidden = false;
+
+    /** 消息炸弹：发送时设定的倒计时秒数，null=非炸弹消息 */
+    private Integer bombSeconds;
+
+    /** 消息炸弹：对方须在此时间前回复，否则自动引爆 */
+    private LocalDateTime bombDeadline;
+
+    /** 消息炸弹状态：PENDING（倒计时中）/ REPLIED（对方已回复拆弹）/ EXPLODED（已引爆） */
+    private String bombStatus;
+
     public Long getId() {
         return id;
     }
@@ -126,5 +144,53 @@ public class Message {
 
     public void setDeleted(Boolean deleted) {
         this.deleted = deleted;
+    }
+
+    public Boolean getEdited() {
+        return edited;
+    }
+
+    public void setEdited(Boolean edited) {
+        this.edited = edited;
+    }
+
+    public LocalDateTime getEditedTime() {
+        return editedTime;
+    }
+
+    public void setEditedTime(LocalDateTime editedTime) {
+        this.editedTime = editedTime;
+    }
+
+    public Boolean getEditHidden() {
+        return editHidden;
+    }
+
+    public void setEditHidden(Boolean editHidden) {
+        this.editHidden = editHidden;
+    }
+
+    public Integer getBombSeconds() {
+        return bombSeconds;
+    }
+
+    public void setBombSeconds(Integer bombSeconds) {
+        this.bombSeconds = bombSeconds;
+    }
+
+    public LocalDateTime getBombDeadline() {
+        return bombDeadline;
+    }
+
+    public void setBombDeadline(LocalDateTime bombDeadline) {
+        this.bombDeadline = bombDeadline;
+    }
+
+    public String getBombStatus() {
+        return bombStatus;
+    }
+
+    public void setBombStatus(String bombStatus) {
+        this.bombStatus = bombStatus;
     }
 }

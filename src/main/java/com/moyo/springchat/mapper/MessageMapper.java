@@ -10,8 +10,10 @@ public interface MessageMapper {
 
     // ===== 通用 CRUD（显式写出，不依赖 BaseMapper 继承）=====
 
-    @Insert("INSERT INTO message(sender_id, target_type, target_id, `type`, content, urgent, `read`, recalled, deleted, create_time) " +
-            "VALUES(#{senderId}, #{targetType}, #{targetId}, #{type}, #{content}, #{urgent}, #{read}, #{recalled}, #{deleted}, #{createTime})")
+    @Insert("INSERT INTO message(sender_id, target_type, target_id, `type`, content, urgent, `read`, recalled, deleted, create_time, " +
+            "bomb_seconds, bomb_deadline, bomb_status) " +
+            "VALUES(#{senderId}, #{targetType}, #{targetId}, #{type}, #{content}, #{urgent}, #{read}, #{recalled}, #{deleted}, #{createTime}, " +
+            "#{bombSeconds}, #{bombDeadline}, #{bombStatus})")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Message message);
 
@@ -21,7 +23,10 @@ public interface MessageMapper {
     @Update("UPDATE message SET sender_id = #{senderId}, target_type = #{targetType}, " +
             "target_id = #{targetId}, `type` = #{type}, content = #{content}, " +
             "urgent = #{urgent}, `read` = #{read}, recalled = #{recalled}, " +
-            "deleted = #{deleted}, create_time = #{createTime} WHERE id = #{id}")
+            "deleted = #{deleted}, create_time = #{createTime}, " +
+            "edited = #{edited}, edited_time = #{editedTime}, edit_hidden = #{editHidden}, " +
+            "bomb_seconds = #{bombSeconds}, bomb_deadline = #{bombDeadline}, bomb_status = #{bombStatus} " +
+            "WHERE id = #{id}")
     int updateById(Message message);
 
     /** 物理删除（仅管理员/内部使用） */
@@ -196,4 +201,13 @@ public interface MessageMapper {
                               @Param("targetType") String targetType,
                               @Param("targetId") Long targetId,
                               @Param("afterId") Long afterId);
+
+    /** ⑩ 消息炸弹：查找“由 fromId 发给 toId 且仍在倒计时中”的最近一条炸弹（toId 回复任何消息时用于拆弹） */
+    @Select("SELECT * FROM message WHERE sender_id = #{fromId} AND target_type = 'USER' AND target_id = #{toId} " +
+            "AND bomb_status = 'PENDING' AND deleted = 0 ORDER BY create_time DESC LIMIT 1")
+    Message findPendingBombFromTo(@Param("fromId") Long fromId, @Param("toId") Long toId);
+
+    /** ⑩ 消息炸弹：定时任务扰描已过期仍在倒计时中的炸弹（待引爆） */
+    @Select("SELECT * FROM message WHERE bomb_status = 'PENDING' AND bomb_deadline <= #{now} LIMIT 200")
+    List<Message> findExpiredPendingBombs(@Param("now") java.time.LocalDateTime now);
 }

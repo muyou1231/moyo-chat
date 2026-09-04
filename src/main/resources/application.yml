@@ -78,6 +78,9 @@ minio:
   readPath: http://localhost:9000 # minio对外提供服务的url
 
 app:
+  # ① 时间胶囊正文加密主密钥（AES-256-GCM）。生产环境请改为随机长串并托管到 KMS，勿用默认值。
+  capsule:
+    secret: ${CAPSULE_SECRET:moyo-capsule-default-secret}
   admin:
     username: admin      # 管理后台登录用户名
     password: admin123   # 管理后台登录密码（生产请修改）

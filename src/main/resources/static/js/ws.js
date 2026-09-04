@@ -149,6 +149,20 @@ window.Ws = {
                 } else if (wm && wm.type === 'MOMENT_MANUAL_REVIEW') {
                     // 人工复审链路状态变化（申请/打回/通过）：作者端实时刷新动态卡片状态
                     if (window.Moment) Moment.onManualReviewUpdate(wm);
+                } else if (wm && wm.type === 'MESSAGE_UPDATED') {
+                    // ④ 消息改写：对方/自己的其他端修改了消息内容，就地替换气泡（不新增一条）
+                    if (window.Chat) Chat.onMessageUpdated(wm);
+                } else if (wm && wm.type === 'BOMB_EXPLODED') {
+                    // ⑨ 消息炸弹引爆：气泡内容替换为占位文案并停掉倒计时
+                    if (window.Chat) Chat.onBombExploded(wm);
+                    App.notify('💣 一条消息炸弹引爆了');
+                } else if (wm && wm.type === 'BOMB_DEFUSED') {
+                    // ⑨ 对方在倒计时内回复，炸弹拆除：停掉倒计时
+                    if (window.Chat) Chat.onBombDefused(wm);
+                } else if (wm && wm.type === 'CAPSULE_UNLOCKED') {
+                    // ① 时间胶囊到点解锁：提示用户去程序空间拆开
+                    App.notify('⏳ ' + (wm.title || '时间胶囊已解锁'));
+                    if (App.activeTab === 'program' && window.Program && Program.loadCapsules) Program.loadCapsules();
                 } else {
                     Chat.onIncoming(wm);
                 }

@@ -428,6 +428,55 @@ window.Api = (function () {
         /** 删除作品 */
         paintingDelete: function (id) {
             return request('DELETE', '/api/painting/' + id);
+        },
+
+        /* ===== ① 时间胶囊 ===== */
+        /** 我相关的胶囊（我写的 + 别人写给我的），未解锁的不含正文 */
+        capsuleList: function () {
+            return request('GET', '/api/capsule/list');
+        },
+        /** 创建胶囊：{ receiverId(可空=写给自己), content, openDate:'yyyy-MM-dd' } */
+        capsuleCreate: function (receiverId, content, openDate) {
+            return request('POST', '/api/capsule/create', {
+                receiverId: receiverId || null, content: content, openDate: openDate
+            });
+        },
+        /** 胶囊详情 */
+        capsuleView: function (id) {
+            return request('GET', '/api/capsule/' + id);
+        },
+
+        /* ===== ③ 用户开关设置 ===== */
+        settingGet: function () {
+            return request('GET', '/api/setting');
+        },
+        /** 设置隐身阅读 */
+        setGhostRead: function (enabled) {
+            return request('POST', '/api/setting/ghost-read', { enabled: !!enabled });
+        },
+
+        /* ===== ⑪ 聊天挖矿：积分 / 亲密度 ===== */
+        pointsMe: function () {
+            return request('GET', '/api/points/me');
+        },
+        pointsLog: function (limit) {
+            return request('GET', '/api/points/log' + (limit ? '?limit=' + limit : ''));
+        },
+        /** 与某好友的亲密度 */
+        intimacy: function (peerId) {
+            return request('GET', '/api/points/intimacy?peerId=' + peerId);
+        },
+
+        /* ===== ④ 消息改写 ===== */
+        messageEdit: function (id, content) {
+            return request('PUT', '/api/message/' + id + '/edit', { messageId: id, content: content });
+        },
+        messageEditHistory: function (id) {
+            return request('GET', '/api/message/' + id + '/edit-history');
+        },
+        /** 消耗积分隐藏「已编辑」角标 */
+        hideEditMark: function (id) {
+            return request('POST', '/api/message/' + id + '/hide-edit-mark');
         }
     };
 })();

@@ -6,6 +6,9 @@ window.Chat = (function () {
     /** 分页加载状态：每个会话的当前页码 + 是否还有更多 */
     var pageInfo = {};  // key "USER:123" -> { page: 0, hasMore: true, loading: false }
 
+    /** ⑨ 消息炸弹默认倒计时秒数（发送方设定，接收方须在此内回复以拆弹） */
+    var DEFAULT_BOMB_SECONDS = 30;
+
     /** 类型安全地判断某发送方是否已被屏蔽加急弹窗（peerId 可能为 number / string） */
     function isPeerMuted(peerId) {
         const p = Number(peerId);
@@ -481,7 +484,13 @@ window.Chat = (function () {
         } else {
             bodyHtml = App.escapeHtml(wm.content);
         }
-        const inner = '<div class="bubble' + (wm.type === 'VOICE' ? ' voice' : '') + '">' + tag + bodyHtml + '</div>';
+        // ④ 消息改写：对方已读后修改过且未花积分隐藏，气泡显示「已编辑」角标
+        const editedTag = wm.edited ? '<div class="edited-tag">已编辑</div>' : '';
+        // ⑨ 消息炸弹：仍在倒计时中时，气泡下方挂一个环形倒计时
+        const bombTag = (wm.bombStatus === 'PENDING' && wm.bombDeadline)
+            ? '<div class="bomb-ring" data-deadline="' + wm.bombDeadline + '">💣 <span class="bomb-left">--</span>s</div>'
+            : '';
+        const inner = '<div class="bubble' + (wm.type === 'VOICE' ? ' voice' : '') + '">' + tag + bodyHtml + editedTag + bombTag + '</div>';
         // 群聊中若发送者是我的好友，气泡名优先显示备注
         const senderName = App.friendName(wm.senderId, wm.senderNickname);
         wrap.innerHTML = App.avatarHtml({ id: wm.senderId, nickname: senderName, avatar: wm.senderAvatar }) + inner;
@@ -496,6 +505,19 @@ window.Chat = (function () {
             };
             wrap.appendChild(btn);
         }
+        // ④ 消息改写：自己的文本消息可编辑（对方未读则静默替换，已读则显示「已编辑」）
+        if (me && !wm.recalled && wm.type === 'TEXT') {
+            const editBtn = document.createElement('button');
+            editBtn.className = 'msg-edit';
+            editBtn.textContent = '编辑';
+            editBtn.onclick = function (e) {
+                e.stopPropagation();
+                startEditMessage(wm);
+            };
+            wrap.appendChild(editBtn);
+        }
+        // ⑨ 炸弹倒计时：气泡渲染完成后启动秒级刷新
+        if (bombTag) startBombTicker(wrap);
         // 自己的消息且已被对方已读：显示「已读」回执
         if (me && wm.read) {
             markReadFlag(wrap);
@@ -798,10 +820,12 @@ window.Chat = (function () {
         }
         ta.value = '';
         const tmpId = 'tmp-' + Date.now();
+        const bombSeconds = App.bombArmed ? DEFAULT_BOMB_SECONDS : null;
         appendLocalBubble('TEXT', content, tmpId, 'sending', urgent);
-        doSend({ senderId: App.user.id, type: 'TEXT', content: content, targetType: App.current.type, targetId: App.current.id, urgent: urgent }, tmpId);
+        doSend({ senderId: App.user.id, type: 'TEXT', content: content, targetType: App.current.type, targetId: App.current.id, urgent: urgent, bombSeconds: bombSeconds }, tmpId);
         if (urgent) startUrgentCooldown();
         resetUrgent();
+        if (bombSeconds) resetBomb();
         sendTypingIfUser(false); // 发送后结束「正在输入」状态
         sendTypingContent('');    // 清空对方向我窥探的面板内容
     }
@@ -1519,6 +1543,33 @@ window.Chat = (function () {
         }
     }
 
+    /** ⑨ 切换「消息炸弹」：仅单聊可用，开启后下一条文本消息将挂上倒计时炸弹 */
+    function toggleBomb() {
+        if (!App.current || App.current.type !== 'USER') {
+            App.notify('消息炸弹仅支持单聊文本消息');
+            return;
+        }
+        App.bombArmed = !App.bombArmed;
+        updateBombBtn();
+        App.notify(App.bombArmed ? ('💣 已装填炸弹（' + DEFAULT_BOMB_SECONDS + ' 秒内对方须回复）') : '已取消炸弹');
+    }
+
+    function updateBombBtn() {
+        const b = el('btn-bomb');
+        if (!b) return;
+        const canBomb = App.current && App.current.type === 'USER';
+        b.disabled = !canBomb;
+        b.classList.toggle('active', !!App.bombArmed);
+    }
+
+    /** 发送后关闭炸弹模式（炸弹为单条消息属性） */
+    function resetBomb() {
+        if (App.bombArmed) {
+            App.bombArmed = false;
+            updateBombBtn();
+        }
+    }
+
     /** 真正通过 WebSocket 发送；连接未建立则直接标记失败 */
     function doSend(dto, tmpId) {
         if (!window.Ws || !Ws.client || !Ws.client.connected) {
@@ -1600,21 +1651,158 @@ window.Chat = (function () {
         doSend({ senderId: App.user.id, type: type, content: content, targetType: App.current.type, targetId: App.current.id }, tmpId);
     }
 
+    /** 消息正文缓存：messageId -> 最新文本。用于编辑时取准确原文（DOM 里的内容已被转义且混有角标） */
+    const contentCache = {};
+
+    /** ⑨ 炸弹倒计时：对单个气泡内的 .bomb-ring 做秒级刷新，归零后自动停（服务端到点会推 BOMB_EXPLODED） */
+    function startBombTicker(wrap) {
+        const ring = wrap.querySelector('.bomb-ring');
+        if (!ring) return;
+        const deadline = Date.parse((ring.getAttribute('data-deadline') || '').replace(' ', 'T'));
+        if (isNaN(deadline)) return;
+        const leftEl = ring.querySelector('.bomb-left');
+        const tick = function () {
+            const left = Math.ceil((deadline - Date.now()) / 1000);
+            if (leftEl) leftEl.textContent = left > 0 ? String(left) : '0';
+            if (left <= 0) {
+                // 到点了，等服务端推送；这里先停止计时避免显示负数
+                clearInterval(timer);
+            }
+        };
+        const timer = setInterval(tick, 1000);
+        tick();
+        // 节点被移除时清理定时器，避免会话切换后残留一堆 interval
+        bombTimers.push(timer);
+    }
+
+    /** 所有炸弹倒计时定时器，切换会话时统一清理 */
+    const bombTimers = [];
+    function clearBombTimers() {
+        while (bombTimers.length) clearInterval(bombTimers.pop());
+    }
+
+    /**
+     * ④ 就地编辑一条自己发出的文本消息。
+     * 对方未读时服务端会静默替换（对方无感知）；已读后会打上「已编辑」角标。
+     */
+    function startEditMessage(wm) {
+        const box = el('chat-messages');
+        const node = box.querySelector('[data-mid="' + wm.id + '"]');
+        if (!node || node.querySelector('.msg-edit-box')) return;
+        const bubble = node.querySelector('.bubble');
+        if (!bubble) return;
+        const old = (contentCache[wm.id] != null) ? contentCache[wm.id] : (wm.content || '');
+
+        bubble.style.display = 'none';
+        const editor = document.createElement('div');
+        editor.className = 'msg-edit-box';
+        editor.innerHTML =
+            '<textarea class="msg-edit-input" rows="3"></textarea>' +
+            '<div class="msg-edit-actions">' +
+            '<button class="msg-edit-save">保存</button>' +
+            '<button class="msg-edit-cancel">取消</button>' +
+            '</div>';
+        node.appendChild(editor);
+
+        const ta = editor.querySelector('.msg-edit-input');
+        ta.value = old;
+        ta.focus();
+        ta.setSelectionRange(old.length, old.length);
+
+        const close = function () {
+            editor.remove();
+            bubble.style.display = '';
+        };
+        editor.querySelector('.msg-edit-cancel').onclick = function (e) { e.stopPropagation(); close(); };
+        ta.onkeydown = function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); close(); }
+        };
+        editor.querySelector('.msg-edit-save').onclick = function (e) {
+            e.stopPropagation();
+            const val = ta.value.trim();
+            if (!val) { App.notify('内容不能为空'); return; }
+            if (val === old) { close(); return; }
+            Api.messageEdit(wm.id, val).then(function (d) {
+                if (d && d.code === 0) {
+                    contentCache[wm.id] = val;
+                    close();
+                    App.notify('已更新');
+                } else {
+                    App.notify((d && d.msg) || '编辑失败');
+                }
+            }).catch(function () { App.notify('编辑失败'); });
+        };
+    }
+
+    /** WS: ④ 消息内容被更新（自己或对方编辑了消息）→ 就地替换气泡文本，不新增一条 */
+    function onMessageUpdated(wm) {
+        if (!wm || !wm.id) return;
+        const box = el('chat-messages');
+        const node = box.querySelector('[data-mid="' + wm.id + '"]');
+        contentCache[wm.id] = wm.content;
+        if (!node) return; // 不在当前会话，忽略
+        const bubble = node.querySelector('.bubble');
+        if (!bubble) return;
+        // 只替换正文：保留加急标签等结构，做法是重建内部 HTML（顺序与其他角标保持一致）
+        const urgentTag = bubble.querySelector('.urgent-tag');
+        const isVoice = bubble.classList.contains('voice');
+        let html = (urgentTag ? '<div class="urgent-tag">⚡ 加急</div>' : '') + App.escapeHtml(wm.content || '');
+        if (wm.edited) html += '<div class="edited-tag">已编辑</div>';
+        bubble.innerHTML = html;
+        if (isVoice) bubble.classList.add('voice');
+    }
+
+    /** WS: ⑨ 炸弹引爆 → 气泡内容替换为占位文案，移除倒计时 */
+    function onBombExploded(wm) {
+        if (!wm || !wm.id) return;
+        const node = el('chat-messages').querySelector('[data-mid="' + wm.id + '"]');
+        if (!node) return;
+        const bubble = node.querySelector('.bubble');
+        if (!bubble) return;
+        const ring = bubble.querySelector('.bomb-ring');
+        if (ring) ring.remove();
+        contentCache[wm.id] = wm.content || '💣 消息已引爆';
+        const urgentTag = bubble.querySelector('.urgent-tag');
+        bubble.innerHTML = (urgentTag ? '<div class="urgent-tag">⚡ 加急</div>' : '')
+            + App.escapeHtml(wm.content || '💣 消息已引爆');
+        bubble.classList.add('bomb-exploded');
+    }
+
+    /** WS: ⑨ 炸弹拆除（对方在倒计时内回复）→ 移除倒计时，消息本身保留 */
+    function onBombDefused(wm) {
+        if (!wm || !wm.id) return;
+        const node = el('chat-messages').querySelector('[data-mid="' + wm.id + '"]');
+        if (!node) return;
+        const ring = node.querySelector('.bomb-ring');
+        if (ring) {
+            ring.classList.add('defused');
+            ring.innerHTML = '✅ 已拆弹';
+        }
+    }
+
     function setInputEnabled(on) {
         const ta = el('msg-input');
         const urgent = el('btn-urgent');
+        const bombBtn = el('btn-bomb');
         const voiceBtn = el('btn-voice');
         const moreBtn = el('btn-more');
         const sendBtn = el('btn-send');
         const holdBtn = el('btn-hold');
         if (ta) ta.disabled = !on;
         if (urgent) urgent.disabled = !on;
+        // ⑨ 消息炸弹仅单聊文本消息可用
+        const canBomb = on && App.current && App.current.type === 'USER';
+        if (bombBtn) {
+            bombBtn.disabled = !canBomb;
+            if (!canBomb && App.bombArmed) resetBomb();
+        }
         if (voiceBtn) voiceBtn.disabled = !on;
         if (moreBtn) moreBtn.disabled = !on;
         if (sendBtn) sendBtn.disabled = !on || voiceMode;
         if (holdBtn) holdBtn.disabled = !on;
         if (!on) voiceMode = false; // 离开会话时复位为文字输入
         updateUrgentBtn(); // 加急按钮状态由 updateUrgentBtn 统一计算（含冷却）
+        updateBombBtn();   // ⑨ 炸弹按钮可用性随会话类型变化
         applyVoiceMode(); // 同步 文字框 / 按住说话 形态
     }
 
@@ -1636,6 +1824,10 @@ window.Chat = (function () {
         onIncoming: onIncoming,
         onRead: onRead,
         onTyping: onTyping,
+        // ④ 消息改写 / ⑨ 消息炸弹的实时事件
+        onMessageUpdated: onMessageUpdated,
+        onBombExploded: onBombExploded,
+        onBombDefused: onBombDefused,
         onTypingContent: onTypingContent,
         onTypingView: onTypingView,
         openLiveView: openLiveView,
@@ -1646,6 +1838,7 @@ window.Chat = (function () {
         ignoreUrgent: ignoreUrgent,
         muteUrgent: muteUrgent,
         toggleUrgentMute: toggleUrgentMute,
+        toggleBomb: toggleBomb,
         onInputFocus: onInputFocus,
         onInputBlur: onInputBlur,
         sendText: sendText,

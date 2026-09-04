@@ -17,6 +17,8 @@ public class MessageSendDto {
     private Long targetId;
     /** 是否加急（可选，默认 false） */
     private Boolean urgent = false;
+    /** ⑩ 消息炸弹：倒计时秒数（可选，null/♤0 表示普通消息，仅支持单聊 TEXT 消息） */
+    private Integer bombSeconds;
 
     public Long getSenderId() {
         return senderId;
@@ -64,5 +66,13 @@ public class MessageSendDto {
 
     public void setUrgent(Boolean urgent) {
         this.urgent = urgent;
+    }
+
+    public Integer getBombSeconds() {
+        return bombSeconds;
+    }
+
+    public void setBombSeconds(Integer bombSeconds) {
+        this.bombSeconds = bombSeconds;
     }
 }

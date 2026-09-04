@@ -1,0 +1,678 @@
+/* ============================================================================
+ * style-premium.css — 视觉与交互「精装升级层」。
+ *
+ * 说明：
+ *   本文件加载顺序在 style.css 之后，采用「相同选择器覆盖 / 新属性叠加」的方式
+ *   对既有样式做整体打磨升级，不删改 style.css 原有规则，风险可控、可整体回退
+ *   （移除本文件的 <link> 即可恢复原样）。涵盖登录注册、主聊天室、通讯录、朋友圈、
+ *   程序空间（学习空间/绘画/番茄钟）、通知中心、语音通话、管理后台等全部页面。
+ * ========================================================================= */
+
+/* ============================== 1. 设计令牌 ============================== */
+:root {
+    /* 修复：以下三个变量此前在多处样式（AI 助手管理卡片 / 表单输入框 / 步骤勾选框）
+       中被引用，但从未在 :root 中定义，导致对应元素背景/边框渲染为空。这里补齐，
+       取值与站内既有同类元素保持一致。 */
+    --card: var(--panel-2);
+    --input-bg: var(--panel);
+    --border-strong: var(--border);
+
+    /* 层次分明的阴影台阶，替代站内此前零散、深浅不一的手写阴影 */
+    --shadow-xs: 0 1px 2px rgba(20, 20, 30, .06);
+    --shadow-sm: 0 3px 10px rgba(20, 20, 30, .08);
+    --shadow-md: 0 10px 28px rgba(20, 20, 30, .12);
+    --shadow-lg: 0 20px 52px rgba(20, 20, 30, .18);
+    --shadow-glow: 0 0 0 3px rgba(7, 193, 96, .16);
+
+    /* 圆角台阶 */
+    --r-sm: 8px;
+    --r-md: 12px;
+    --r-lg: 16px;
+    --r-pill: 999px;
+
+    /* 统一缓动曲线：不用生硬的 linear/ease，让位移更「有弹性」但不夸张 */
+    --ease: cubic-bezier(.22, .61, .36, 1);
+    --ease-out: cubic-bezier(.16, 1, .3, 1);
+    --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+
+    /* 品牌渐变（绿→蓝），站内多处已零散使用过相近配色，这里统一成变量复用 */
+    --brand-grad: linear-gradient(135deg, #07c160 0%, #0aa8e0 100%);
+    --brand-grad-soft: linear-gradient(135deg, rgba(7, 193, 96, .13), rgba(16, 174, 255, .13));
+    --brand-grad-strong: linear-gradient(135deg, #06d16a 0%, #06a6e8 100%);
+}
+
+[data-theme="dark"] {
+    --card: var(--panel-2);
+    --input-bg: #1b1b1b;
+    --border-strong: #4a4a4a;
+    --shadow-xs: 0 1px 2px rgba(0, 0, 0, .35);
+    --shadow-sm: 0 3px 12px rgba(0, 0, 0, .4);
+    --shadow-md: 0 12px 32px rgba(0, 0, 0, .48);
+    --shadow-lg: 0 24px 60px rgba(0, 0, 0, .6);
+    --shadow-glow: 0 0 0 3px rgba(7, 193, 96, .3);
+}
+
+/* 无障碍：系统开启「减少动态效果」时，全站动画/过渡几乎瞬时完成 */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+}
+
+/* ============================== 2. 全局基础打磨 ============================== */
+body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+::selection {
+    background: rgba(7, 193, 96, .28);
+}
+
+/* 全站细滚动条（Firefox），配合下面各容器的 webkit 滚动条细化 */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar) transparent;
+}
+.side-list::-webkit-scrollbar, .chat-messages::-webkit-scrollbar, .modal::-webkit-scrollbar,
+.moments-feed::-webkit-scrollbar, .ad-main::-webkit-scrollbar, .ai-msgs::-webkit-scrollbar,
+.ai-sessions-list::-webkit-scrollbar, .study-body::-webkit-scrollbar, .notice-list::-webkit-scrollbar,
+.pg-grid::-webkit-scrollbar, .perm-friends::-webkit-scrollbar, .ad-table-wrap::-webkit-scrollbar,
+.ad-chat-thread::-webkit-scrollbar, .add-friend-modal .af-list::-webkit-scrollbar,
+.picker-list::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+}
+.side-list::-webkit-scrollbar-thumb, .chat-messages::-webkit-scrollbar-thumb, .modal::-webkit-scrollbar-thumb,
+.moments-feed::-webkit-scrollbar-thumb, .ad-main::-webkit-scrollbar-thumb, .ai-msgs::-webkit-scrollbar-thumb,
+.ai-sessions-list::-webkit-scrollbar-thumb, .study-body::-webkit-scrollbar-thumb, .notice-list::-webkit-scrollbar-thumb,
+.pg-grid::-webkit-scrollbar-thumb, .perm-friends::-webkit-scrollbar-thumb, .ad-table-wrap::-webkit-scrollbar-thumb,
+.ad-chat-thread::-webkit-scrollbar-thumb, .add-friend-modal .af-list::-webkit-scrollbar-thumb,
+.picker-list::-webkit-scrollbar-thumb {
+    background: var(--scrollbar);
+    border-radius: var(--r-pill);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+}
+.side-list::-webkit-scrollbar-thumb:hover, .chat-messages::-webkit-scrollbar-thumb:hover,
+.moments-feed::-webkit-scrollbar-thumb:hover, .ad-main::-webkit-scrollbar-thumb:hover {
+    background: var(--text-sub);
+}
+
+/* ============================== 3. 通用工具类 ============================== */
+/* 按钮 loading 态：禁用态基础上叠加一个旋转圈，文案保留但视觉弱化 */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid rgba(255, 255, 255, .55);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: uiSpin .7s linear infinite;
+}
+.ghost.btn-loading::after, .btn-loading.mc-btn-ghost::after {
+    border-color: rgba(0, 0, 0, .18);
+    border-top-color: var(--text-sub);
+}
+
+@keyframes uiSpin { to { transform: rotate(360deg); } }
+
+/* 骨架屏 shimmer（预留：列表 / 卡片加载态可直接套用 .skeleton） */
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background: var(--panel-hover);
+    border-radius: var(--r-sm);
+    color: transparent !important;
+}
+.skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .35) 50%, transparent 70%);
+    animation: uiShimmer 1.4s ease-in-out infinite;
+}
+[data-theme="dark"] .skeleton::after {
+    background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .08) 50%, transparent 70%);
+}
+@keyframes uiShimmer {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(100%); }
+}
+
+/* 面板 / 视图切换渐入（由 app.js 在切换 tab / 移动端视图时挂载） */
+@keyframes panelFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.panel-fade { animation: panelFade .3s var(--ease-out); }
+
+@keyframes mobileViewIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+@media (max-width: 768px) {
+    #app.mv-anim .sidebar, #app.mv-anim .chat, #app.mv-anim .moments,
+    #app.mv-anim .admin-panel, #app.mv-anim .program {
+        animation: mobileViewIn .28s var(--ease-out);
+    }
+}
+
+/* 登录 → 主界面 的整体入场 */
+@keyframes appEnter { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+.app-enter { animation: appEnter .5s var(--ease-out); }
+
+/* 主题切换按钮：图标切换时的轻微旋入反馈 */
+@keyframes themeSpin { from { transform: rotate(-70deg) scale(.5); opacity: .25; } to { transform: none; opacity: 1; } }
+.spin-once { animation: themeSpin .45s var(--ease-spring); }
+
+/* 弹层关闭动效（由 ui-polish.js 拦截 remove() 后挂载 .closing 触发） */
+@keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modalOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(10px) scale(.97); } }
+@keyframes menuOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-6px) scale(.96); } }
+.modal-overlay.closing { animation: overlayOut .16s ease forwards; }
+.modal-overlay.closing .modal { animation: modalOut .16s var(--ease) forwards; }
+.me-menu.closing { animation: menuOut .12s ease forwards; }
+.ad-modal.closing { animation: overlayOut .16s ease forwards; }
+.ad-modal.closing .ad-modal-card { animation: modalOut .16s var(--ease) forwards; }
+
+/* ============================== 4. 登录 / 注册页 ============================== */
+.auth {
+    background:
+        radial-gradient(circle at 15% 20%, rgba(7, 193, 96, .35), transparent 42%),
+        radial-gradient(circle at 85% 15%, rgba(16, 174, 255, .3), transparent 45%),
+        radial-gradient(circle at 50% 90%, rgba(124, 92, 255, .25), transparent 50%),
+        linear-gradient(135deg, #131b26 0%, #1c2734 55%, #202b3a 100%);
+    background-size: 160% 160%, 160% 160%, 160% 160%, 100% 100%;
+    animation: authAurora 18s ease-in-out infinite alternate;
+    overflow: hidden;
+}
+@keyframes authAurora {
+    0%   { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+    100% { background-position: 12% 8%, 88% 10%, 46% 92%, 0 0; }
+}
+
+.auth-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, .88);
+    backdrop-filter: blur(22px) saturate(1.4);
+    -webkit-backdrop-filter: blur(22px) saturate(1.4);
+    border: 1px solid rgba(255, 255, 255, .5);
+    box-shadow: var(--shadow-lg);
+    border-radius: var(--r-lg);
+    animation: modalIn .38s var(--ease-out);
+}
+[data-theme="dark"] .auth-card {
+    background: rgba(38, 38, 42, .82);
+    border-color: rgba(255, 255, 255, .08);
+}
+
+.auth-card .logo {
+    background: var(--brand-grad-strong);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    letter-spacing: 6px;
+}
+
+/* 登录/注册分段控件：胶囊化，去掉旧的下划线指示，用背景块表示选中 */
+.auth-tabs {
+    background: var(--bg-soft);
+    border-radius: var(--r-pill);
+    padding: 4px;
+    gap: 2px;
+}
+.auth-tabs button {
+    border-radius: var(--r-pill);
+    border-bottom: none !important;
+    position: relative;
+    z-index: 1;
+}
+.auth-tabs button.active {
+    background: var(--panel-2);
+    box-shadow: var(--shadow-sm);
+    border-bottom-color: transparent !important;
+}
+.auth-tabs button:not(.active):hover {
+    color: var(--text);
+}
+
+.auth-input {
+    border-radius: var(--r-sm);
+    border-color: var(--border);
+    box-shadow: var(--shadow-xs) inset;
+}
+.auth-input:focus {
+    box-shadow: 0 0 0 3px rgba(7, 193, 96, .14);
+    transform: translateY(-1px);
+}
+
+.auth-submit {
+    background: var(--brand-grad);
+    background-size: 160% 160%;
+    box-shadow: 0 10px 24px rgba(7, 193, 96, .32);
+    border-radius: var(--r-sm);
+    font-weight: 600;
+    letter-spacing: .5px;
+    transition: background-position .5s var(--ease), transform .15s var(--ease-out), box-shadow .25s var(--ease);
+}
+.auth-submit:hover {
+    background-position: 100% 0;
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px rgba(7, 193, 96, .4);
+}
+.auth-submit:active {
+    transform: translateY(0) scale(.98);
+}
+.auth-submit:disabled {
+    opacity: .75;
+    box-shadow: none;
+    transform: none;
+}
+
+.auth-code-btn, .auth-cancel {
+    border-radius: var(--r-sm);
+}
+.auth-link {
+    position: relative;
+}
+.auth-link::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 100%; bottom: -2px;
+    height: 1px;
+    background: var(--primary);
+    transition: right .2s var(--ease-out);
+}
+.auth-link:hover::after { right: 0; }
+.auth-link:hover { text-decoration: none; }
+
+/* ============================== 5. 侧边栏 / 顶部导航 ============================== */
+.sidebar { box-shadow: var(--shadow-xs); }
+
+.me-avatar-clickable, #me-avatar { transition: transform .2s var(--ease-spring); }
+#me-avatar:hover { transform: scale(1.05); }
+
+.theme-toggle, .edit-profile, .notice-bell, .logout {
+    box-shadow: var(--shadow-xs);
+}
+.theme-toggle:hover, .edit-profile:hover, .notice-bell:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+.logout:hover { transform: translateY(-1px); }
+
+.side-tabs button.active::after {
+    width: 28px;
+    height: 3px;
+    border-radius: var(--r-pill);
+    background: var(--brand-grad);
+    box-shadow: 0 2px 6px rgba(7, 193, 96, .5);
+}
+.side-tabs button {
+    transition: color .2s var(--ease), transform .12s var(--ease-out);
+}
+.side-tabs button:hover { color: var(--text); }
+.side-tabs button:active { transform: scale(.97); }
+
+.side-search input {
+    box-shadow: var(--shadow-xs) inset;
+    transition: box-shadow .2s var(--ease), background-color .2s var(--ease);
+}
+.side-search input:focus {
+    box-shadow: 0 0 0 3px rgba(7, 193, 96, .14);
+    background: var(--panel-2);
+}
+
+/* 会话 / 好友列表行：更明显但不生硬的高亮反馈 */
+.item {
+    transition: background-color .18s var(--ease), transform .12s var(--ease-out);
+}
+.item:hover { transform: translateX(1px); }
+.item.active {
+    background: var(--active-bg);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+.item .avatar, .item .avatar-wrap { transition: transform .15s var(--ease-spring); }
+.item:hover .avatar { transform: scale(1.04); }
+
+/* ============================== 6. 通用按钮统一「呼吸感」 ============================== */
+.auth-submit, .ci-send, .btn-urgent, .btn-voice, .op, .chat-actions .op,
+.ad-btn, .mc-btn, .composer-publish, .composer-img-btn, .composer-perm-btn,
+.composer-draft-btn, .moments-publish-btn, .moments-setting-btn,
+.modal .modal-actions button, .call-btn, .notice-read-btn, .fd-op,
+.ai-send, .ai-clear, .ai-mode, .ai-sess-new, .study-sub, .study-back,
+.pomo-btns .primary, .pomo-btns .ghost, .pomo-set .primary, .vis-pill, .mtab,
+.pg-subbar .primary, .study-empty .primary, .ad-modal-actions button,
+.side-record-btn, .composer-ai-btn, .ad-switch-track {
+    transition: transform .14s var(--ease-out), box-shadow .2s var(--ease),
+                background-color .2s var(--ease), border-color .2s var(--ease),
+                color .2s var(--ease), filter .15s ease;
+}
+.auth-submit:hover, .ci-send:hover:not(:disabled), .btn-urgent:hover:not(:disabled),
+.btn-voice:hover:not(:disabled), .op:hover, .chat-actions .op:hover,
+.ad-btn:hover, .mc-btn:hover, .composer-publish:hover:not(:disabled),
+.composer-img-btn:hover, .composer-perm-btn:hover, .composer-draft-btn:hover,
+.moments-publish-btn:hover, .moments-setting-btn:hover, .fd-op:hover,
+.ai-send:hover:not(:disabled), .ai-clear:hover, .study-sub:hover, .study-back:hover,
+.pomo-btns .primary:hover:not(:disabled), .pomo-btns .ghost:hover,
+.vis-pill:hover, .pg-subbar .primary:hover, .study-empty .primary:hover,
+.side-record-btn:hover, .composer-ai-btn:hover, .notice-read-btn:hover {
+    box-shadow: var(--shadow-sm);
+}
+.auth-submit:active, .ci-send:active:not(:disabled), .op:active, .ad-btn:active,
+.mc-btn:active, .composer-publish:active:not(:disabled), .fd-op:active,
+.ai-send:active:not(:disabled), .pomo-btns .primary:active:not(:disabled) {
+    transform: scale(.96);
+}
+
+/* 主色按钮统一换成品牌渐变，层级更高级 */
+.ci-send, .composer-publish, .ad-btn:not(.ghost):not(.danger):not(.warn):not(.ok),
+.mc-btn-primary, .moments-publish-btn, .notice-box-foot .ad-btn,
+.study-empty .primary, .pg-subbar .primary, .ai-send:not(.stopping),
+.pomo-btns .primary, .ad-submit {
+    background: var(--brand-grad);
+    border-color: transparent;
+}
+.ci-send:hover:not(:disabled), .composer-publish:hover:not(:disabled),
+.ad-btn:not(.ghost):not(.danger):not(.warn):not(.ok):hover, .mc-btn-primary:hover,
+.moments-publish-btn:hover, .study-empty .primary:hover, .pg-subbar .primary:hover,
+.ai-send:not(.stopping):hover:not(:disabled), .pomo-btns .primary:hover:not(:disabled),
+.ad-submit:hover {
+    background: var(--brand-grad);
+    filter: brightness(1.06);
+}
+
+/* 圆形图标按钮：更柔和的浮起反馈 */
+.ci-ico:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
+.ci-ico:active:not(:disabled) { transform: scale(.9) !important; }
+
+/* 卡片式按钮（程序空间 / 绘画 / 通知等）统一 hover 抬升 */
+.pg-card, .pt-card, .ad-card, .admin-card, .ad-as-card, .study-plan, .notice-item {
+    transition: transform .2s var(--ease-out), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.notice-item:hover, .study-plan:hover { box-shadow: var(--shadow-sm); }
+.ad-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+/* ============================== 7. 聊天主区 ============================== */
+.chat-header { box-shadow: var(--shadow-xs); }
+
+/* 消息气泡入场：新消息「浮现」而不是硬切出现（历史消息批量加载时也会有一次轻柔整体淡入） */
+@keyframes msgInOther { from { opacity: 0; transform: translate3d(-6px, 6px, 0); } to { opacity: 1; transform: none; } }
+@keyframes msgInMe { from { opacity: 0; transform: translate3d(6px, 6px, 0); } to { opacity: 1; transform: none; } }
+.msg { animation: msgInOther .28s var(--ease-out) both; }
+.msg.me { animation: msgInMe .28s var(--ease-out) both; }
+.msg.call-record { animation: panelFade .3s var(--ease-out) both; }
+.sys-tip, .msg-time { animation: panelFade .25s var(--ease-out) both; }
+
+.msg .bubble {
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow .15s var(--ease), transform .12s var(--ease-out);
+}
+.msg .bubble:hover { box-shadow: var(--shadow-sm); }
+
+.typing-tip.show { box-shadow: var(--shadow-xs); }
+
+.chat-input { box-shadow: 0 -1px 0 var(--border), var(--shadow-xs); }
+.chat-input textarea {
+    transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.chat-input textarea:focus:not(:disabled) {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(7, 193, 96, .12);
+}
+.ci-send { box-shadow: 0 6px 16px rgba(7, 193, 96, .28); }
+.ci-send:disabled { box-shadow: none; }
+
+.more-panel {
+    animation: modalIn .18s var(--ease-out);
+    box-shadow: var(--shadow-lg);
+}
+
+.voice-panel { box-shadow: var(--shadow-lg); }
+
+/* ============================== 8. 弹窗 / 提示 ============================== */
+.modal-overlay {
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+.modal {
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+}
+.modal .modal-actions .primary {
+    background: var(--brand-grad);
+}
+.modal .modal-actions .primary:hover {
+    filter: brightness(1.06);
+    box-shadow: var(--shadow-sm);
+}
+.modal .modal-actions .primary.danger {
+    background: linear-gradient(135deg, var(--danger), var(--danger-hover));
+}
+
+.me-menu { box-shadow: var(--shadow-lg); }
+
+/* Toast：堆叠容器（app.js 会把 toast 挂到 #toast-stack 下；未挂载前退化为原有单条居中样式，保证兼容） */
+#toast-stack {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+}
+#toast-stack .toast {
+    position: relative;
+    top: auto; left: auto; transform: none;
+}
+.toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: var(--r-pill);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(6px);
+}
+.toast::before {
+    font-size: 13px;
+    line-height: 1;
+    font-weight: 700;
+}
+.toast.info::before { content: 'i'; color: #6cb8ff; }
+.toast.success::before { content: '✓'; color: #4be08a; }
+.toast.error::before { content: '!'; color: #ff7a76; }
+.toast.warning::before { content: '‼'; color: #ffc35c; }
+.toast.closing { animation: toastOut .2s ease forwards; }
+@keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-10px); } }
+
+/* ============================== 9. 朋友圈 / 程序空间 / 卡片类 ============================== */
+.moment-card { animation: panelFade .32s var(--ease-out) both; }
+.moment-card:hover { box-shadow: var(--shadow-sm); }
+.moments-publish-btn { box-shadow: 0 6px 16px rgba(7, 193, 96, .28); }
+
+.pg-card::before { background: var(--pg-c, var(--brand-grad)); height: 3px; }
+.pg-card:hover { box-shadow: var(--shadow-md); }
+.pt-card:hover { box-shadow: var(--shadow-md); }
+
+.ai-row { animation: panelFade .26s var(--ease-out) both; }
+.ai-bubble.ai { box-shadow: var(--shadow-xs); }
+.ai-mode.active { box-shadow: var(--shadow-xs); }
+.ai-sess.active { box-shadow: var(--shadow-xs); }
+
+.sp-progress .sp-bar { background: var(--brand-grad); }
+
+/* ============================== 10. 语音通话浮层 ============================== */
+.call-card .ci-avatar, .call-card .cc-avatar, .call-card .ci2-avatar {
+    box-shadow: 0 0 0 6px rgba(255, 255, 255, .06), var(--shadow-lg);
+}
+.call-btn.accept { box-shadow: 0 10px 26px rgba(7, 193, 96, .4); }
+.call-btn.reject { box-shadow: 0 10px 26px rgba(250, 81, 81, .35); }
+
+/* ============================== 11. 管理后台 ============================== */
+.ad-login {
+    background:
+        radial-gradient(circle at 20% 25%, rgba(7, 193, 96, .3), transparent 45%),
+        radial-gradient(circle at 80% 20%, rgba(16, 174, 255, .28), transparent 45%),
+        linear-gradient(135deg, #131b26 0%, #1c2734 60%, #202b3a 100%);
+}
+.ad-login-card {
+    background: rgba(255, 255, 255, .9);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    animation: modalIn .35s var(--ease-out);
+}
+[data-theme="dark"] .ad-login-card { background: rgba(38, 38, 42, .88); }
+.ad-submit { box-shadow: 0 10px 24px rgba(7, 193, 96, .3); }
+
+/* 管理端通用弹窗（冻结/打回等）补上入场动画，与用户端 .modal-overlay 手感一致（复用 style.css 已定义的 overlayIn / modalIn） */
+.ad-modal { animation: overlayIn .18s ease; }
+.ad-modal-card { animation: modalIn .22s var(--ease); }
+
+.ad-nav-item {
+    transition: background-color .18s var(--ease), color .18s var(--ease), transform .12s var(--ease-out);
+    position: relative;
+}
+.ad-nav-item:active { transform: scale(.98); }
+.ad-nav-item.active {
+    background: var(--brand-grad-soft);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.ad-table tbody tr { transition: background-color .12s ease; }
+.ad-card { transition: transform .2s var(--ease-out), box-shadow .2s var(--ease); }
+.ad-donut-hole { box-shadow: var(--shadow-xs) inset; }
+
+/* ============================== 12. 表单元素统一聚焦反馈 ============================== */
+.modal input.modal-input, .modal select.modal-input, .modal textarea.modal-input,
+.ad-input, .ai-input, .mc-comment-input, .composer-text, .sr-input {
+    transition: border-color .2s var(--ease), box-shadow .2s var(--ease);
+}
+.modal input.modal-input:focus, .modal select.modal-input:focus, .modal textarea.modal-input:focus,
+.ad-input:focus, .mc-comment-input:focus, .composer-text:focus, .sr-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(7, 193, 96, .12);
+}
+
+/* ============================== 13. 头像 / 顶部通用 ============================== */
+.avatar { transition: transform .15s var(--ease-spring); }
+.avatar-clickable:hover { transform: translateY(-1px); }
+.mc-avatar-img, .ai-avatar { box-shadow: var(--shadow-xs); }
+
+/* 未读徽标：轻微弹入，避免角标睡然“贴上去”。
+   注意：仅作用于常驻单例节点（标题栏/铃铛角标），不包含会话列表里跟随整个列表
+   频繁重建的 .badge（否则每次列表刷新都会重新弹一下，反而显得息震）。 */
+@keyframes badgePop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.tab-badge.show, .notice-badge { animation: badgePop .25s var(--ease-spring); }
+
+/* ============================== 14. 移动端细节补强 ============================== */
+@media (max-width: 768px) {
+    .mobile-tabbar .mtab { transition: color .15s var(--ease), transform .15s var(--ease-spring); }
+    .mobile-tabbar .mtab.active .mtab-ico { transform: translateY(-2px) scale(1.08); }
+    .mobile-tabbar .mtab:active { transform: scale(.94); }
+    .auth-card { animation: modalIn .32s var(--ease-out); }
+}
+
+/* ============================== 15. 创新功能（时间胶囊 / 积分 / 消息炸弹 / 改写） ============================== */
+
+/* 消息炸弹输入按钮 */
+.ci-ico.bomb .ico { font-size: 16px; }
+.ci-ico.bomb.active { color: #ff4d4f; border-color: #ff4d4f; background: rgba(255,77,79,.12); }
+
+/* ④ 消息改写「已编辑」角标 */
+.edited-tag {
+    display: inline-block; margin-top: 4px; font-size: 11px; color: var(--text-3, #999);
+    background: var(--fill-2, #f0f0f0); border-radius: 4px; padding: 1px 6px; cursor: default;
+}
+
+/* ⑨ 消息炸弹倒计时环 */
+.bomb-ring {
+    display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+    font-size: 12px; color: #ff4d4f; background: rgba(255,77,79,.10);
+    border: 1px solid rgba(255,77,79,.4); border-radius: 10px; padding: 2px 8px;
+}
+.bomb-ring.defused { color: #07c160; background: rgba(7,193,96,.10); border-color: rgba(7,193,96,.4); }
+.bomb-left { font-variant-numeric: tabular-nums; font-weight: 600; }
+.bomb-exploded { filter: grayscale(.3); opacity: .8; }
+
+/* ④ 消息改写内联编辑器 */
+.msg-edit-box { padding: 6px 0; }
+.msg-edit-input {
+    width: 100%; box-sizing: border-box; border: 1px solid var(--border-2, #ddd);
+    border-radius: 8px; padding: 6px 8px; font: inherit; resize: vertical; background: var(--bg-1, #fff);
+    color: var(--text-1, #222);
+}
+.msg-edit-actions { display: flex; gap: 8px; margin-top: 6px; }
+.msg-edit-save, .msg-edit-cancel {
+    border: none; border-radius: 8px; padding: 5px 14px; cursor: pointer; font-size: 13px;
+}
+.msg-edit-save { background: var(--brand-grad, #07c160); color: #fff; }
+.msg-edit-cancel { background: var(--fill-2, #eee); color: var(--text-2, #555); }
+
+/* ① 时间胶囊面板 */
+.cap-create {
+    background: var(--bg-1, #fff); border: 1px solid var(--border-2, #eee); border-radius: 14px;
+    padding: 12px; margin: 12px 0; box-shadow: var(--shadow-xs, 0 1px 3px rgba(0,0,0,.05));
+}
+.cap-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.cap-row .modal-input { flex: 1; min-width: 120px; }
+.cap-hint { font-size: 12px; color: var(--text-3, #999); margin-top: 6px; }
+.pg-btn {
+    border: none; border-radius: 10px; padding: 8px 18px; cursor: pointer; font-size: 14px;
+    color: #fff; background: linear-gradient(135deg,#7c5cff,#4a8cff);
+}
+.pg-btn:disabled { opacity: .5; cursor: default; }
+.pg-back {
+    border: none; background: transparent; color: var(--brand-grad, #07c160);
+    cursor: pointer; font-size: 14px; padding: 0; margin-bottom: 6px;
+}
+.capsule-list { display: flex; flex-direction: column; gap: 10px; }
+.cap-item { background: var(--bg-1, #fff); border: 1px solid var(--border-2, #eee); border-radius: 12px; padding: 12px; }
+.cap-item-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.cap-who { font-size: 13px; color: var(--text-2, #555); }
+.cap-badge { font-size: 12px; padding: 2px 8px; border-radius: 8px; }
+.cap-badge.sealed { color: #7c5cff; background: rgba(124,92,255,.12); }
+.cap-badge.unlocked { color: #07c160; background: rgba(7,193,96,.12); }
+.cap-content { font-size: 14px; color: var(--text-1, #222); white-space: pre-wrap; word-break: break-word; }
+.cap-sealed { color: var(--text-3, #999); font-size: 13px; }
+
+/* ⑪ 积分与亲密度面板 */
+.points-body { padding: 4px 0; }
+.pt-balance {
+    text-align: center; background: linear-gradient(135deg,#07c160,#ffb300);
+    border-radius: 16px; padding: 22px; color: #fff; margin: 12px 0;
+    box-shadow: var(--shadow-sm, 0 4px 12px rgba(0,0,0,.08));
+}
+.pt-num { font-size: 38px; font-weight: 700; line-height: 1; }
+.pt-label { font-size: 13px; opacity: .92; margin-top: 6px; }
+.pt-intimacy {
+    margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 14px;
+    background: var(--bg-1, #fff); border: 1px solid var(--border-2, #eee); color: var(--text-1, #222);
+}
+.pt-log-title { font-size: 14px; font-weight: 600; color: var(--text-2, #555); margin: 4px 0 8px; }
+.pt-log { display: flex; flex-direction: column; gap: 6px; }
+.pt-log-item {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--bg-1, #fff); border: 1px solid var(--border-2, #eee);
+    border-radius: 10px; padding: 8px 12px; font-size: 13px;
+}
+.pt-log-reason { color: var(--text-2, #555); }
+.pt-log-val.gain { color: #07c160; font-weight: 600; }
+.pt-log-val.cost { color: #ff4d4f; font-weight: 600; }
+

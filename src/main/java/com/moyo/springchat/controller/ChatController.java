@@ -3,11 +3,14 @@ package com.moyo.springchat.controller;
 import com.moyo.springchat.common.AuthUser;
 import com.moyo.springchat.dto.MessageSendDto;
 import com.moyo.springchat.dto.WsMessage;
+import com.moyo.springchat.entity.Message;
+import com.moyo.springchat.mapper.MessageMapper;
+import com.moyo.springchat.service.AiAssistantService;
 import com.moyo.springchat.service.FriendService;
 import com.moyo.springchat.service.GroupService;
 import com.moyo.springchat.service.MessageService;
+import com.moyo.springchat.service.PointsService;
 import com.moyo.springchat.service.UserService;
-import com.moyo.springchat.service.AiAssistantService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -49,6 +52,12 @@ public class ChatController {
 
     @Autowired
     private AiAssistantService aiAssistantService;
+
+    @Autowired
+    private PointsService pointsService;
+
+    @Autowired
+    private MessageMapper messageMapper;
 
     /** 记录每个用户上一次成功发送加急消息的时间戳 */
     private final ConcurrentMap<Long, Long> lastUrgentTime = new ConcurrentHashMap<>();
@@ -120,7 +129,38 @@ public class ChatController {
             lastUrgentTime.put(senderId, System.currentTimeMillis());
         }
 
-        WsMessage wm = messageService.save(senderId, dto.getType(), dto.getContent(), dto.getTargetType(), dto.getTargetId(), dto.getUrgent());
+        // ⑨ 消息炸弹：仅单聊文本消息支持，发送时设定倒计时秒数
+        Integer bombSeconds = dto.getBombSeconds();
+        boolean isBomb = bombSeconds != null && bombSeconds > 0
+                && "USER".equals(dto.getTargetType()) && "TEXT".equals(dto.getType());
+        if (bombSeconds != null && bombSeconds > 0 && !isBomb) {
+            Map<String, Object> warn = new HashMap<>();
+            warn.put("type", "SEND_FAILED");
+            warn.put("reason", "消息炸弹仅支持单聊文本消息");
+            messagingTemplate.convertAndSend("/topic/user/" + senderId, warn);
+            return;
+        }
+
+        WsMessage wm = messageService.save(senderId, dto.getType(), dto.getContent(), dto.getTargetType(),
+                dto.getTargetId(), dto.getUrgent(), isBomb ? bombSeconds : null);
+
+        // ⑪ 聊天挖矿：发消息 +2 分（每日上限由 PointsService 内部用 Redis 控制）
+        try {
+            pointsService.grant(senderId, 2, "MESSAGE_SEND", wm.getId());
+        } catch (Exception ignored) {
+            // 积分属于锦上添花，失败绝不能影响消息收发主链路
+        }
+
+        // 单聊：好友之间累计亲密度；收到回复时拆掉对方发来的待引爆炸弹
+        if ("USER".equals(dto.getTargetType())) {
+            try {
+                if (friendService.isFriend(senderId, dto.getTargetId())) {
+                    pointsService.creditIntimacy(senderId, dto.getTargetId());
+                }
+                defusePendingBomb(senderId, dto.getTargetId());
+            } catch (Exception ignored) {
+            }
+        }
 
         if ("USER".equals(dto.getTargetType())) {
             // 发给接收方与发送方本人
@@ -136,6 +176,27 @@ public class ChatController {
             // 私人会话：自己发给自己，仅推送给发送方本人
             messagingTemplate.convertAndSend("/topic/user/" + senderId, wm);
         }
+    }
+
+    /**
+     * ⑨ 消息炸弹拆弹：replierId 回复了 originalSenderId 的消息时，
+     * 若 originalSenderId 曾给 replierId 发过仍在倒计时的炸弹，则视为"接盘成功"，置为 REPLIED 并通知双方。
+     */
+    private void defusePendingBomb(Long replierId, Long originalSenderId) {
+        Message bomb = messageMapper.findPendingBombFromTo(originalSenderId, replierId);
+        if (bomb == null) return;
+        bomb.setBombStatus("REPLIED");
+        messageMapper.updateById(bomb);
+
+        Map<String, Object> evt = new HashMap<>();
+        evt.put("type", "BOMB_DEFUSED");
+        evt.put("id", bomb.getId());
+        evt.put("senderId", bomb.getSenderId());
+        evt.put("targetType", bomb.getTargetType());
+        evt.put("targetId", bomb.getTargetId());
+        evt.put("defusedBy", replierId);
+        messagingTemplate.convertAndSend("/topic/user/" + bomb.getSenderId(), evt);
+        messagingTemplate.convertAndSend("/topic/user/" + replierId, evt);
     }
 
     /** 异步让「目标 AI」回复用户：新线程调用 AI，生成后落库并推送给用户本人（不推给助手账户） */

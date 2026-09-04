@@ -1,6 +1,7 @@
 package com.moyo.springchat.controller;
 
 import com.moyo.springchat.common.Result;
+import com.moyo.springchat.dto.MessageEditReq;
 import com.moyo.springchat.dto.MessageSearchItem;
 import com.moyo.springchat.dto.WsMessage;
 import com.moyo.springchat.entity.Message;
@@ -13,7 +14,9 @@ import com.moyo.springchat.mapper.PinMapper;
 import com.moyo.springchat.mapper.UrgentMuteMapper;
 import com.moyo.springchat.service.FriendService;
 import com.moyo.springchat.service.GroupService;
+import com.moyo.springchat.service.MessageEditService;
 import com.moyo.springchat.service.MessageService;
+import com.moyo.springchat.service.UserSettingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -51,6 +54,12 @@ public class MessageController {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
+    private UserSettingService userSettingService;
+
+    @Autowired
+    private MessageEditService messageEditService;
 
     /** 从缓存/DB 返回的 Map 中取出 id 等数值时，兼容 JSON 反序列化把 Long 变成 Integer 的情况 */
     private static Long toLong(Object v) {
@@ -319,7 +328,10 @@ public class MessageController {
                 return Result.error("你们还不是好友");
             }
             List<Long> ids = messageService.markRead(uid, targetType, targetId);
-            if (!ids.isEmpty()) {
+            // ③ 隐身阅读：阅读方开启后仍更新自己的已读状态（便于多端同步），
+            // 但不向对方推送已读回执，对方界面不会显示「已读」。
+            boolean ghost = userSettingService.isGhostRead(uid);
+            if (!ids.isEmpty() && !ghost) {
                 WsMessage notice = new WsMessage();
                 notice.setType("READ");
                 notice.setSenderId(uid);          // 阅读者
@@ -330,6 +342,48 @@ public class MessageController {
             }
         }
         return Result.ok("ok");
+    }
+
+    // ==================== ④ 消息改写 ====================
+
+    /**
+     * 编辑自己已发送的文本消息。
+     * 对方未读时静默替换（不显示标记）；已读后修改会打上「已编辑」角标。
+     */
+    @PutMapping("/{id}/edit")
+    public Result<?> editMessage(@RequestAttribute("uid") Long uid,
+                                 @PathVariable("id") Long id,
+                                 @RequestBody MessageEditReq req) {
+        if (req == null || req.getContent() == null) {
+            return Result.error("内容不能为空");
+        }
+        try {
+            messageEditService.edit(uid, id, req.getContent());
+            return Result.ok("已更新");
+        } catch (IllegalArgumentException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 我的编辑历史（仅发送者本人可看，含最初原文） */
+    @GetMapping("/{id}/edit-history")
+    public Result<?> editHistory(@RequestAttribute("uid") Long uid, @PathVariable("id") Long id) {
+        try {
+            return Result.ok(messageEditService.history(uid, id));
+        } catch (IllegalArgumentException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 消耗积分隐藏「已编辑」角标（{@link MessageEditService#HIDE_MARK_COST} 分） */
+    @PostMapping("/{id}/hide-edit-mark")
+    public Result<?> hideEditMark(@RequestAttribute("uid") Long uid, @PathVariable("id") Long id) {
+        try {
+            messageEditService.hideEditMark(uid, id);
+            return Result.ok("已隐藏「已编辑」标记");
+        } catch (IllegalArgumentException e) {
+            return Result.error(e.getMessage());
+        }
     }
 
     /** 输入状态通知：单聊有效。focus 输入框时 typing=true，blur 或发送后 typing=false，
